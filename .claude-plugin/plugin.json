@@ -1,0 +1,16 @@
+{
+  "name": "sftpgo-skill",
+  "version": "0.5.0",
+  "description": "Reference skill for SFTPGo: REST API payloads, WebAdmin configuration, deployment recipes, Event Action template authoring, SaaS conventions, OSS-vs-Enterprise awareness. Verified against the SFTPGo source tree.",
+  "author": {
+    "name": "Nicola Murino",
+    "url": "https://sftpgo.com"
+  },
+  "homepage": "https://github.com/sftpgo/sftpgo-skill",
+  "upstream": "https://sftpgo.com",
+  "license": "Apache-2.0",
+  "keywords": ["sftpgo", "sftp", "event-actions", "templates", "oidc", "rest-api"],
+  "skills": [
+    "skills/sftpgo"
+  ]
+}

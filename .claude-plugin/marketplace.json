@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "sftpgo-marketplace",
+  "description": "Claude Code plugin for SFTPGo — the managed file transfer platform. REST API payloads, WebAdmin configuration, deployment recipes, Event Action template authoring, and OSS-vs-Enterprise awareness.",
+  "owner": {
+    "name": "SOFTWARE ENGINEERING S.R.L.",
+    "email": "support@sftpgo.com"
+  },
+  "plugins": [
+    {
+      "name": "sftpgo-skill",
+      "description": "AI-agent-agnostic reference skill for SFTPGo. Teaches the AI how to drive SFTPGo correctly: REST API payloads (tagged unions, secret envelope, required fields), WebAdmin forms, Go template authoring for Event Actions, deployment recipes (Docker, Kubernetes, env-var convention), SaaS conventions, and OSS-vs-Enterprise awareness.",
+      "category": "development",
+      "version": "0.5.0",
+      "author": {
+        "name": "Nicola Murino",
+        "email": "support@sftpgo.com"
+      },
+      "homepage": "https://sftpgo.com",
+      "source": "."
+    }
+  ]
+}
