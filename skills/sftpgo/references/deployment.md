@@ -33,6 +33,19 @@ The commercial licensed tiers (used both on-premises and on cloud marketplaces) 
 
 **Cloud marketplace offerings** (AWS, Azure, GCP) ship preconfigured: license activated, audit-logs enabled, in-memory transfer pipes on, data provider initialized for standalone use. Audit-logs is implemented as **two cooperating plugins** (`eventstore` for write/persist, `eventsearcher` for query) — both must be loaded for the audit-logs UI to function. The Starter marketplace tier allows **2 active plugins total**, which audit-logs already fills, so on Starter there is no spare slot for a third plugin without dropping audit-logs or moving up a tier. Premium and higher tiers have no plugin limit. See the "What is preconfigured on marketplace offerings" section of [installation.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/installation.md) for the full list.
 
+**Marketplace OS images and updates.** AWS AMIs (x86_64 and arm64) are based on **Amazon Linux 2023** (RHEL-based, `dnf`). Azure and Google Cloud Linux VMs are based on **Debian 13** (`apt`). Both SFTPGo and the OS are kept current through the distribution's standard package manager:
+
+```shell
+sudo dnf update                          # AWS — Amazon Linux
+sudo apt update && sudo apt upgrade      # Azure / GCP — Debian
+```
+
+The SFTPGo service is restarted automatically by the package's post-install scriptlet when the `sftpgo` package is upgraded — no manual `systemctl restart` is required.
+
+Check the running SFTPGo version with `sftpgo --version`; the same version string is also logged at service startup (`starting SFTPGo v2.7.x ...`, visible via `journalctl -u sftpgo` or in the configured log file). Marketplace offerings hide the version in the WebAdmin by default, so on those instances the CLI and the startup logs are the canonical sources. Container-based marketplace listings have their own update procedure documented on each listing page: the AWS Container listing distributes images through the AWS marketplace registry and is updated by deploying the new image version published by the listing; the Azure AKS listing is a CNAB bundle and is upgraded through its CNAB mechanism. The generic [docker.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/docker.md) covers self-hosted containers from `registry.sftpgo.com` — it does not apply to the marketplace container listings, which use the marketplace's own registry / packaging.
+
+**Marketplace pricing — what to tell customers.** All marketplace listings — both Enterprise and open-source-based — are billed entirely through the cloud provider; there is no separate fee from SFTPGo on top of the marketplace charge. Enterprise listings include an activated SFTPGo Enterprise license (nothing else to purchase or activate); open-source-based listings ship the SFTPGo Open Source edition (AGPLv3) and do not enable Enterprise features. To access Enterprise features, the customer switches to one of the Enterprise listings. Answer pricing questions in terms of what the customer pays for and what they get — do not speculate about how the marketplace charge is split between compute and software. Authoritative reference: the "Pricing and licensing" callout in [installation.md `## Commercial Marketplaces`](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/installation.md).
+
 ### Post-install sanity checklist
 
 1. Confirm the service is running: `systemctl status sftpgo` (Linux) / `Get-Service sftpgo` (Windows).
