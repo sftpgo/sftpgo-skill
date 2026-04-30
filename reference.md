@@ -415,7 +415,7 @@ Almost everything in this reference targets the **Enterprise** edition. The **Op
 - The full Go template engine with `toJson` / helpers / conditions / loops (most examples in §3 and in `examples.md` assume this).
 - Action types: **ICAP**, **IMAP**, **event reports** (type 19), **PGP**, **execute-before-file-publish** staged uploads, enhanced copy with source disposition / glob / retries, data retention with archival.
 - OIDC role mapping, PKCE-without-secret, session control, Azure B2C, custom labels.
-- WebClient WOPI / Collabora, TUS resumable uploads.
+- WebClient WOPI / Collabora, TUS resumable uploads. (TUS works on Enterprise even in limited mode — no license needed; opt in per HTTPD binding via `upload_chunk_size > 0`.)
 - Share email authentication, group governance, path / scope restrictions.
 - Cloud backend performance optimizations (memory pipes / small-file speedups), GCS HNS, SFTP backend SOCKS proxy, FTP backend.
 - Clustering, the WebAdmin UI for LDAP / Geo-IP / email templates / SSH host keys, API key management UI, and the Enterprise builds of the `eventstore` / `eventsearcher` plugins that power the audit-logs browsing UI (open-source builds of those plugins are also available on OSS, and the browsing UI itself works in both editions — what differs is the depth of the captured data).

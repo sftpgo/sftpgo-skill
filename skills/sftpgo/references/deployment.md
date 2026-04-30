@@ -480,6 +480,18 @@ SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1
 
 This is the standard configuration for cloud-only deployments and is the default on SFTPGo marketplace offerings. The trade-off is higher RAM per concurrent transfer (a buffer per upload); on hosts with limited memory and many concurrent uploads, file-backed pipes may still be preferable.
 
+### 5.12 TUS resumable uploads (WebClient and REST API)
+
+TUS is opt-in per HTTPD binding via `upload_chunk_size` (in MB). A value `> 0` enables the TUS endpoints on that binding for both the WebClient and the REST API; `0` disables them. Enterprise feature — works in **limited mode too** (no license needed). Unrelated to memory pipes.
+
+```shell
+SFTPGO_HTTPD__BINDINGS__0__UPLOAD_CHUNK_SIZE=10
+```
+
+The value also drives the chunk size used by the WebClient. REST API / `tus-js-client` programmatic clients pick their own chunk size — the server accepts any. In multi-instance HA deployments, configure **session affinity** on the load balancer: TUS upload state is held in memory on the instance that received the initial `POST` and follow-up `PATCH` chunks must reach the same instance.
+
+A common reason to enable TUS is fronting SFTPGo with Cloudflare (or any CDN that imposes a per-request body cap): TUS chunks the upload under the cap. See [the Cloudflare tutorial](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/cloudflare.md) for the full env block (proxy IPs, `CF-Connecting-IP`, TLS termination headers).
+
 ---
 
 ## 6. Pitfalls

@@ -56,7 +56,7 @@ The **canonical and most up-to-date list** is the "What Enterprise adds" table o
 
 **WebClient**
 
-- **Enterprise adds**: WOPI / Collabora document editing and real-time collaboration, TUS resumable uploads.
+- **Enterprise adds**: WOPI / Collabora document editing and real-time collaboration, TUS resumable uploads. WOPI / Collabora is license-gated; **TUS works in limited mode too** (no license needed). TUS is opt-in per HTTPD binding — set `upload_chunk_size > 0` (env: `SFTPGO_HTTPD__BINDINGS__0__UPLOAD_CHUNK_SIZE=10`) to enable TUS endpoints for both the WebClient and the REST API on that binding; `0` disables them. Has nothing to do with memory pipes.
 
 **Sharing**
 
