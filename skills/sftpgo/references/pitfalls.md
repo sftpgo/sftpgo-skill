@@ -196,6 +196,26 @@ This is documented upstream behavior, not a bug. If you template the path:
 {{printf "%s/" (pathJoin (stringSlice "/some/templated/path"))}}
 ```
 
+## 10b. PGP target derived via `pathDir` needs an explicit trailing slash
+
+The PGP action treats a target ending with `/` as a destination directory and derives the per-file output filename (encrypt: append `.pgp`; decrypt: strip the last extension or append `.dec`). Without the trailing slash the target is a literal output path.
+
+A common config to "encrypt next to the source" templates the parent directory:
+
+```yaml
+target: /{{ pathDir .VirtualPath }}/   # trailing slash REQUIRED
+```
+
+Drop the slash and the rule works only by luck for files at root: `/{{ pathDir "/file.txt" }}` renders to `//`, which `path.Clean`s to `/`. Root is intrinsically a directory, so the derive branch fires anyway and the file lands at `/file.txt.pgp`. For a non-root upload like `/sub/file.txt` the same template renders to `/sub` (no trailing slash → literal output), and PGP would write the encrypted bytes overwriting (or colliding with) the directory `/sub`. Always include the trailing slash for portability across upload paths.
+
+## 10c. Source-only PGP / Compress: rejected at validate
+
+PGP (encrypt and decrypt) and Compress reject configurations with `Folder` set and `TargetFolder` empty. These actions produce derived output that has no sensible per-user destination when the source is shared: per-user iteration would replicate identical output across every matching user's home, or race with disposition on the shared source.
+
+Canonical pattern for in-place batch processing inside a shared folder: **set both `Folder` and `TargetFolder` to the same value**. Explicit intent, no inference. Same-folder configurations are valid and runtime collision detection is path-level (`PGP.validate()` rejects `key == value` unconditionally; runtime `checkSamePath` resolves virtual paths through `IsSameResource`).
+
+Copy and Extract are intentionally **not** subject to this rule: their source-only configuration is the documented "distribute a shared resource into every user's home" pattern.
+
 ## 11. Schedule trigger sees no `.VirtualPath` / `.Event`
 
 If the rule trigger is `schedule` (3) and the template references `.VirtualPath`, the output is empty. Schedules have no filesystem context. Use chained actions (retention action → email template with `.RetentionChecks`) or restructure as a provider/fs-event rule.
@@ -204,4 +224,49 @@ If the rule trigger is `schedule` (3) and the template references `.VirtualPath`
 
 Root cause is almost always **trigger / field mismatch** — see pitfall 11 above and `trigger-types.md`. The template **compiles** because the keys always exist in the map; the values are just zero-valued for this trigger.
 
+## 13. System-executed actions don't fire other rules
+
+If a rule action runs **as the system** rather than on behalf of a real user, the events that action emits do not chain into other rules. Both axes are filtered:
+
+- **Filesystem operations from system-context actions** — Filesystem actions (rename, copy, delete, compress, PGP, etc.), Data Retention deletes (user- or folder-scoped), and any other fs operation issued by the event manager. The connection protocol (`EventAction` or `DataRetention`) is filtered before fs-event rules are matched. A separate "rename on upload" rule will not see the file the first action wrote.
+- **Provider events from system-driven operations** — provider rules (`Add user`, `Update share`, etc.) explicitly skip events whose executor is `__system__`. Adding/updating users from another rule, automated disables from IP-blocked rules, JIT-provisioning side effects: none of these fire provider-event rules.
+
+The intent is to keep the rule graph predictable and prevent cascading triggers.
+
+**Supported pattern for multi-step workflows:** list multiple actions on the **same** rule, in the desired order. Within a rule, actions execute sequentially and share `EventParams` — no chaining via emitted events is needed (or possible).
+
+**For "trash on delete" or "archive on retention" workflows:** use the **Archive folder** option built into the Data Retention action, not a separate fs-event rule. The retention's own pipeline does the move; a downstream rule would never trigger.
+
 Mitigation: lint templates against the trigger. A human-scale check is to look at `trigger-types.md` "Populates" column for the chosen trigger and confirm every dotted field you reference is in that list.
+
+## 14. Name / role / group filters on a system-context action skip the action
+
+Symptom: an fs action that worked yesterday now logs `no <op> executed` after the rule was edited to add a name, role, or group filter. Or a freshly-built scheduled rule that copies/PGP-encrypts/deletes inside a virtual folder never runs anything despite the schedule firing.
+
+Cause. The synthetic system identity used by system-context actions has no real username, role, or groups (it has the literal name `__system__` and empty role/groups). Per-user condition filters describe real users; checking them against the system identity always fails, and the dispatcher reports "no <op> executed" because no iteration succeeded. This applies to:
+
+- Filesystem actions (rename, delete, mkdir, exist, metadata-check, copy, pgp, compress, extract) when configured with both source and target folders, or with a source folder for source-only ops.
+- IMAP action when a target folder is set.
+- Folder-scoped data retention.
+
+Fix. Remove the user/role/group filter from the rule. System actions describe shared resources, not users. Use trigger and event-status filters to scope a system rule; reserve user filters for per-user rules.
+
+## 15b. Microsoft IMAP OAuth2 — `AUTHENTICATE failed` after a successful token refresh
+
+Symptom: an IMAP action against `outlook.office365.com:993` logs `new oauth2 token saved …` immediately followed by `unable to login using OAuth2 to the IMAP server …: AUTHENTICATE failed.` The token endpoint succeeded, so it's not a scope or client-secret problem.
+
+Cause. SFTPGo sends the IMAP `Username` field in the SASL XOAUTH2 string; Exchange Online validates that the user who authorized the OAuth flow has access to **that mailbox**. If the action's `Username` points at a shared/service mailbox (e.g. `inbound@domain.com`) but the operator clicked **Get** while signed in as a different account (typically an admin without explicit Full Access on that mailbox), Exchange rejects the AUTHENTICATE even though the token itself is valid.
+
+Fix.
+1. Grant a delegate user Full Access to the target mailbox: `Add-MailboxPermission -Identity inbound@domain.com -User delegate@domain.com -AccessRights FullAccess` (Exchange Online PowerShell).
+2. Revoke the existing app consent from [My Apps](https://myapps.microsoft.com/) so the previous refresh token is invalidated.
+3. Re-run **Get** in the IMAP action form, signing in as `delegate@domain.com`. The new refresh token is bound to that identity and IMAP AUTHENTICATE succeeds.
+
+## 15. Backup chain cannot delete or rename the backup file
+
+Symptom: an action chained after the Backup action that tries to delete or move the just-produced dump file is denied with a permission error.
+
+Cause. The synthetic user used by the backup chain is granted list and download access only on the backups directory. Email and HTTP attachments can read the dump (PermDownload), but Filesystem actions (delete, rename, copy) targeting the backups directory are refused at the connection layer. This is a security guarantee: even a misrouted or compromised downstream action cannot tamper with backups.
+
+Fix. Don't chain destructive operations after Backup. To clean up old dumps, configure data retention separately on the backups directory (folder-scoped retention with the backups folder as source).
+

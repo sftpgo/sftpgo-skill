@@ -22,7 +22,7 @@ SFTPGo Event Actions are discriminated by the integer `type` field on the `BaseE
 | 13     | IDP account check         | `idp_config`                  | `template_user`, `template_admin`                                                                                                | **Premium**  |
 | 14     | User inactivity check     | `user_inactivity_config`      | *(none)*                                                                                                                         | Standard     |
 | 15     | Rotate logs               | *(none)*                      | —                                                                                                                                | Standard     |
-| 16     | IMAP                      | `imap_config`                 | `email[]`, `subject`, `body`, `attachments[]`, `target_folder`, `flags[]`                                                        | Standard     |
+| 16     | IMAP                      | `imap_config`                 | `path`                                                                                                                           | Standard     |
 | 17     | ICAP                      | `icap_config`                 | `paths[]`                                                                                                                        | **Premium**  |
 | 18     | Share expiration check    | `share_expiration_config`     | *(none)*                                                                                                                         | Standard     |
 | 19     | Event report              | `event_report_config`         | *(none — filters are literal, report data surfaces via `.EventReports`)*                                                         | **Premium**  |
@@ -78,6 +78,19 @@ Either `body` or `parts` must be set (not both). Multipart parts need unique `na
 | `attach_event_report`   | no        | Bool — auto-attaches the JSON/CSV event report when an Event Report action has run earlier in the rule. |
 | `content_type`          | no        | `0` = text (default), `1` = HTML.                                                                       |
 
+### type 8 — Data retention check
+
+`retention_config`:
+
+| Field            | Template? | Notes                                                                                                                                                         |
+| ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `folders[]`      | no        | Each entry has `path` (literal virtual path), `retention` (hours; `0` excludes the path), `delete_empty_dirs` (bool).                                         |
+| `archive_folder` | no        | Optional virtual folder name; files are moved here instead of deleted.                                                                                        |
+| `archive_path`   | yes       | Base path inside the archive folder. Placeholders supported.                                                                                                  |
+| `source_folder`  | no        | When set, retention runs **once as a system task** on this virtual folder. Paths in `folders[]` are relative to its root. Rule-level user filters are ignored. |
+| `split_reports`  | no        | Per-user split notifications. Applies only to user-scoped retention; cannot be combined with `source_folder`.                                                 |
+| `dry_run`        | no        | When `true`, produces the report without deleting files or creating archive copies.                                                                           |
+
 ### type 9 — Filesystem
 
 `fs_config.type` discriminates the sub-action. Each sub-action has its own paths/config block; the unused ones are ignored. See `references/trigger-types.md` for which triggers allow this action type.
@@ -85,16 +98,18 @@ Either `body` or `parts` must be set (not both). Multipart parts need unique `na
 | `fs_config.type` | Name           | Config field                                                     | Template-rendered                                      |
 | ---------------- | -------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
 | 1                | Rename         | `renames[]` (old, new)                                           | both paths per entry                                   |
-| 2                | Delete         | `deletes[]` (`[]string`)                                         | each path (trailing `/` = delete *contents*, keep dir) |
+| 2                | Delete         | `deletes[]` (`[]string`)                                         | each path (trailing `/` = delete *contents*; glob in last component matches multiple entries) |
 | 3                | Mkdirs         | `mkdirs[]` (`[]string`)                                          | each path                                              |
 | 4                | Exist          | `exist[]` (`[]string`)                                           | each path                                              |
 | 5                | Compress       | `compress` (`paths[]`, `name`)                                   | both                                                   |
-| 6                | Copy           | `copy[]` (source, target)                                        | both paths per entry                                   |
-| 7                | PGP            | `pgp` (`paths[]`, private/public key, passphrase, mode, profile) | `paths[]`                                              |
+| 6                | Copy           | `copy[]` (source, target, per-entry disposition)                 | both paths per entry                                   |
+| 7                | PGP            | `pgp` (`paths[]` per-entry disposition, private/public key, passphrase, mode, profile) | `paths[]` (key, value, move path) |
 | 8                | Metadata check | `folders[]`                                                      | none (folders are literal)                             |
 | 9                | Decompress     | `decompress` (source path, target path)                          | both paths                                             |
 
 Trailing-slash delete semantics: a path ending with `/` deletes the **contents** of that directory without removing the directory itself. Without trailing slash the directory is removed recursively.
+
+Glob support (last path component only, `*`/`?`/`[…]`): Copy, PGP, Delete. PGP/Copy/Delete reject glob + trailing slash on the same entry; Mkdir/Exist/Rename reject globs entirely. PGP per-entry disposition (`on_source_processed`: 0 keep, 1 delete, 2 move; `on_source_processed_move_path`) mirrors Copy's `on_source_copied`. Single-file PGP source with target ending `/` derives the per-file output name (encrypt: append `.pgp`; decrypt: strip last extension or append `.dec`).
 
 ### type 13 — IDP account check
 
@@ -114,17 +129,18 @@ See `examples.md` for full templates and `pitfalls.md` for the `.IDPFields` / `c
 
 ### type 16 — IMAP
 
-`imap_config` (similar to `email_config` but uploaded into a mailbox via IMAP APPEND):
+`imap_config` — fetches unread messages from an IMAP mailbox and writes their attachments into SFTPGo storage:
 
-| Field                                             | Template?    | Notes                                                                                                                             |
-| ------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `host`, `port`, `username`, `password`, `use_tls` | no           | Connection settings (password is a secret).                                                                                       |
-| `email[]`                                         | yes          | Envelope recipients (rendered per entry).                                                                                         |
-| `subject`                                         | yes          |                                                                                                                                   |
-| `body`                                            | yes          |                                                                                                                                   |
-| `attachments[]`                                   | yes          | User VFS paths, rendered.                                                                                                         |
-| `target_folder`                                   | yes          | Target IMAP mailbox (rendered — common values: `INBOX`, `Archive`). Non-empty target → action runs once as system (not per-user). |
-| `flags[]`                                         | no (literal) | Optional IMAP message flags (e.g. `\Seen`).                                                                                       |
+| Field                                            | Template? | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `endpoint`                                       | no        | `imap://host:port` (cleartext) or `imaps://host:port` (TLS). Required.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `username`, `password`                           | no        | Mailbox credentials when `auth_type = 0` (login). `password` is a secret. Ignored for OAuth2.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `auth_type`                                      | no        | `0` = login (username/password), `1` = OAuth2 (uses `oauth2`).                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `oauth2`                                         | no        | OAuth2 settings (provider, tenant, client id/secret, refresh token). Refresh token is auto-rotated when the provider returns a new one. See `tutorials/oauth2-smtp-imap.md`.                                                                                                                                                                                                                                                                                                                                       |
+| `mailbox`                                        | no        | IMAP mailbox to select (default `INBOX`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `path`                                           | yes       | Destination path template for each attachment file. Rendered with the standard event template context plus per-message fields.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `post_process_action`                            | no        | What to do with fetched messages on the IMAP server: `0` = mark seen, `1` = delete + expunge.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `target_folder`                                  | no        | Optional virtual folder name. When set, attachments land in the shared folder and the action runs once as a system task. When empty, attachments land in a single destination user's home directory: the sender for user-bound triggers, otherwise a single user that must be selected by a name/role/group filter on the rule (wildcard or empty filters on a scheduled rule are a misconfiguration — the destination is undefined).                                                                              |
 
 ### type 17 — ICAP
 

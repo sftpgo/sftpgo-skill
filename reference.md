@@ -242,7 +242,7 @@ SFTPGO_DATA_PROVIDER__SSLMODE=1
 
 # Defender (intrusion detection)
 SFTPGO_COMMON__DEFENDER__ENABLED=true
-SFTPGO_COMMON__DEFENDER__DRIVER=provider  # 'memory' on single-node, 'provider' for HA
+SFTPGO_COMMON__DEFENDER__DRIVER=provider  # 'memory' (fastest, in-RAM) or 'provider' (persists across restarts; SQLite/MySQL/PostgreSQL/CockroachDB)
 SFTPGO_COMMON__DEFENDER__BAN_TIME=60
 
 # ACME (Let's Encrypt) — prefer the WebAdmin UI (Server Manager → Configurations

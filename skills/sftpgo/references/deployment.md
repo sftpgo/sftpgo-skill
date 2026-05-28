@@ -279,7 +279,7 @@ SFTPGO_COMMON__DEFENDER__BAN_TIME=60
 SFTPGO_COMMON__DEFENDER__THRESHOLD=15
 ```
 
-Use `driver=provider` in multi-node setups so the ban list is shared; `memory` is faster on single-node.
+Use `driver=provider` to persist the ban list across restarts (single-node SQLite is fine) and to share it across nodes when on MySQL/PostgreSQL/CockroachDB. `memory` is the fastest option when persistence is not required.
 
 ### 5.6 Expose metrics + enable the profiler (internal network only)
 
@@ -560,6 +560,12 @@ Reload picks up cert / key files only; full config changes need a restart.
 ### 7.4 Dump / restore data
 
 Use the REST API `POST /api/v2/dumpdata` and `POST /api/v2/loaddata` (or the WebAdmin Maintenance section) to produce a provider-independent JSON backup and restore it. The dump is portable across data-provider types (e.g. export from SQLite, import into PostgreSQL) and across SFTPGo versions on supported upgrade paths. See the REST API spec for the exact endpoints.
+
+**SQLite live file backup**: SFTPGo opens the SQLite database in WAL mode, so the database is split across `<name>` + `<name>-wal` + `<name>-shm`. A live `cp` of the main file alone loses uncheckpointed writes. Either stop the service first, or use `dumpdata`, or the SQLite `VACUUM INTO '/path/to/copy.db';` API. CIFS shares are not supported for SQLite (WAL needs working file locks).
+
+### 7.5 Reconcile stored names after changing `naming_rules`
+
+Enabling the lowercase or trim bits of `data_provider.naming_rules` on an installation that already holds non-conforming names makes those users/folders/groups/roles/event objects return 404: lookups are normalized while stored rows are not. `sftpgo convertnames` reports the mismatches (and any blocking collision) without modifying data; `sftpgo convertnames --execute` renames them with a single statement that changes only the name column (secrets carry their own encryption context and keep working). It is idempotent and re-runnable. Run it with the instance stopped (SQLite); conversion is available for the SQL providers, on bolt only the report is produced, memory is out of scope. PostgreSQL/MySQL/CockroachDB default collations are case-insensitive, so there the conversion is portability oriented. Not applicable on SaaS.
 
 ---
 

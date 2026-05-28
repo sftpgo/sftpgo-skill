@@ -46,7 +46,7 @@ The **canonical and most up-to-date list** is the "What Enterprise adds" table o
 **Event Manager** (this is where the skill spends most of its pages)
 
 - **OSS**: basic automation — you can write rules that fire on events and invoke simple actions. Action template fields (HTTP body, email subject/body, command args, …) are processed through a flat **`strings.Replacer`** pass over a fixed list of dot-prefixed placeholders such as `{{.Name}}`, `{{.VirtualPath}}`, `{{.IDPField<claim>}}` and the timestamp variants. There is no conditional, no range, no pipe, no FuncMap, no nested accessor: anything outside the placeholder list survives verbatim in the rendered output. See [`reference.md`](../../../reference.md) §3.1 for the full OSS placeholder list.
-- **Enterprise adds**: the full Go `text/template` engine with helper functions (`toJson`, `humanizeBytes`, `pathJoin`, …), conditions (`{{if}}`), loops (`{{range}}`), structured accessors (`{{.Object.User.Email}}`, `{{index .IDPFields "claim"}}`); virtual-folder integration for cross-backend operations; the **ICAP** action (antivirus / DLP), **IMAP** action (email ingestion), **event reports**, **PGP** encryption / decryption; **Execute Before File Publish** for staged upload processing; enhanced **copy** action with source disposition, glob patterns, retries; **data retention with archival**.
+- **Enterprise adds**: the full Go `text/template` engine with helper functions (`toJson`, `humanizeBytes`, `pathJoin`, …), conditions (`{{if}}`), loops (`{{range}}`), structured accessors (`{{.Object.User.Email}}`, `{{index .IDPFields "claim"}}`); virtual-folder integration for cross-backend operations; the **ICAP** action (antivirus / DLP), **IMAP** action (email ingestion), **event reports**, **PGP** encryption / decryption (per-entry source disposition, glob patterns, directory targets); **Execute Before File Publish** for staged upload processing; enhanced **copy** action with source disposition, glob patterns, retries; enhanced **delete** action with glob patterns; **data retention with archival**.
 - Practical implication: almost every example in [`examples.md`](examples.md), every template function in [`template-functions.md`](template-functions.md), and most of the action types in [`action-types.md`](action-types.md) assume Enterprise. A user on OSS asking to "send a webhook body built with `toJson`" or "scan uploads with ICAP" is asking for Enterprise-only features. A `{{if .Initiator.User}}` guard pasted on OSS will appear in the rendered webhook body as the literal string `{{if .Initiator.User}}` — the engine does not error.
 
 **OpenID Connect**
@@ -68,7 +68,7 @@ The **canonical and most up-to-date list** is the "What Enterprise adds" table o
 
 **Administration**
 
-- **Enterprise adds**: clustering with near real-time propagation; extended WebAdmin UI for OIDC, LDAP, Geo-IP, TLS certificates, email templates, SSH host keys; API key management from the UI.
+- **Enterprise adds**: clustering with near real-time propagation; extended WebAdmin UI for OIDC, LDAP, Geo-IP, TLS certificates, email templates, SSH host keys; API key management from the UI; granular admin permissions for groups and folders (`view_groups`, `manage_groups`, `del_groups`, `view_folders`, `manage_folders`, `del_folders`) that split the OSS umbrella `manage_groups` / `manage_folders` into independent view, edit, and delete grants. The env var `SFTPGO_HOOK__LEGACY_ADMIN_PERMS=1` restores the umbrella semantics for in-place upgrades.
 
 **Plugins**
 

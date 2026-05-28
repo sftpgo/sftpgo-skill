@@ -140,6 +140,8 @@ Full detail: [virtual-folders.md](https://raw.githubusercontent.com/sftpgo/docs/
 
 Public or password-protected links that expose a subset of the user's namespace to external recipients. Scopes: `1` read, `2` write, `3` read+write. Options include password, expiration, IP allow-list, email authentication (`options.auth_mode: 1`).
 
+Per-user / per-group share-path governance: `filters.allowed_share_paths` (gate — when non-empty, share paths must be at or below an entry; `/` is wildcard) and `filters.denied_share_paths` (carve-out; `/` is literal-only). Combined matcher uses longest-prefix-match across both lists; if the same path appears in both, the denied entry takes precedence. Inheritance from groups is additive (union).
+
 Tutorial + operational detail: [tutorials/shares.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/shares.md).
 
 ### 3.5 Authentication
@@ -204,7 +206,7 @@ If the user asks *"how do I automate X"* — produce the full POST payload.
 | File not visible at all                                      | `filters.file_patterns` with `deny_policy: 1` (hide)                                                                                 |
 | Event rule doesn't fire                                      | `options.names` / `options.role_names` / `options.group_names` conditions exclude the subject, or the trigger type doesn't match     |
 | Template renders empty string                                | Referenced key is not populated for that trigger (see the "Placeholder picker" table in SKILL.md)                                    |
-| Share returns 404                                            | Share expired, IP restriction, path no longer exists, or owning user disabled                                                        |
+| Share returns 404                                            | Share expired, IP restriction, path no longer exists, owning user disabled, or share path violates `filters.allowed_share_paths` / `filters.denied_share_paths` (checked at runtime, so tightening the filter blocks pre-existing shares) |
 | Secret decryption error after restore                        | KMS key changed / missing; secrets are encrypted with the active KMS at write time                                                   |
 | REST API returns `400 validation_error`                      | Message in the body is the exact reason — read it first, the skill's pitfalls file has the common ones                               |
 | Cloud-backend upload fails with "unable to open pipe" / "read-only file system" / "no space left" | The host has no writable temp dir for per-transfer pipes. Fix: `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1`. See `deployment.md §5.11`. Default on marketplace offerings. |
