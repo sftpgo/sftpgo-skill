@@ -54,10 +54,10 @@ Every secret-typed field on the JSON payload (backend credentials, API keys, ser
 {"status": "Plain", "payload": "your-secret"}
 ```
 
-The server validates, encrypts, and stores it. On `GET` the same envelope comes back with the encrypted form — by default `Secretbox` (NaCl AEAD) for the built-in local KMS. With an external provider the `status` can be `AWS`, `GCP`, `VaultTransit`, `AzureKeyVault`, `OracleKeyVault`, or `AES-256-GCM`. The `key` and `additional_data` fields are blanked out before serialization:
+The server validates, encrypts, and stores it. On `GET` the same envelope comes back with the encrypted form — by default `AES-256-GCM` for the built-in KMS (the `local://` provider uses `Secretbox`, NaCl AEAD). With an external provider the `status` can be `AWS`, `GCP`, `VaultTransit`, `AzureKeyVault`, or `OracleKeyVault`. The `key` and `additional_data` fields are blanked out before serialization:
 
 ```json
-{"status": "Secretbox", "payload": "<ciphertext>", "key": "", "additional_data": ""}
+{"status": "AES-256-GCM", "payload": "<ciphertext>", "key": "", "additional_data": ""}
 ```
 
 **To preserve** the current secret on a `PUT`, send any envelope whose `status` is the encrypted status the server is using — the payload can be empty. The simplest form is just the status field:
@@ -73,13 +73,13 @@ The server validates, encrypts, and stores it. On `GET` the same envelope comes 
       "bucket": "my-bucket",
       "region": "eu-west-1",
       "access_key": "AKIA…",
-      "access_secret": {"status": "Secretbox"}
+      "access_secret": {"status": "AES-256-GCM"}
     }
   }
 }
 ```
 
-Use whatever `status` value the `GET` response showed — `Secretbox` for the default local KMS, `AWS` / `GCP` / `VaultTransit` / `AzureKeyVault` / `OracleKeyVault` / `AES-256-GCM` for the corresponding external KMS providers. Round-tripping the full envelope from `GET` works too — extra fields are ignored.
+Use whatever `status` value the `GET` response showed — `AES-256-GCM` for the default built-in KMS (`Secretbox` with the `local://` provider), `AWS` / `GCP` / `VaultTransit` / `AzureKeyVault` / `OracleKeyVault` for the corresponding external KMS providers. Round-tripping the full envelope from `GET` works too — extra fields are ignored.
 
 Sending `{"status": "Plain", "payload": "newvalue"}` replaces the secret. Sending `{"status": "Plain", "payload": ""}` clears it.
 
@@ -103,13 +103,15 @@ Every user must end up with a `home_dir`. If the payload omits it, the server fi
 | Local                | 0       | *(none — files live under `home_dir`)*                         | n/a                                                                                                                                                                                                                  |
 | S3                   | 1       | `s3config.bucket`, `region` (or embedded in `endpoint`)        | If `access_key` + `access_secret` are both empty, the AWS SDK falls back to its **default credential chain** — env vars (`AWS_*`), shared config, EC2 instance profile, ECS / EKS task role, IRSA. `role_arn` works on top of any of these. |
 | Google Cloud Storage | 2       | `gcsconfig.bucket`                                             | Set `automatic_credentials: 1` to use **Application Default Credentials** (GCE/GKE metadata, Workload Identity, `GOOGLE_APPLICATION_CREDENTIALS`, `gcloud` ADC). When `0`, supply `credentials` (service-account JSON envelope).            |
-| Azure Blob           | 3       | `azblobconfig.container`, `account_name` *(or `sas_url`)*      | If both `account_key` and `sas_url` are empty, the SDK falls back to `DefaultAzureCredential` — managed identity, env vars, workload identity, Azure CLI, Visual Studio sign-in, in that order.                                            |
+| Azure Blob           | 3       | `azblobconfig.container`, `account_name` *(or `sas_url`)*      | If both `account_key` and `sas_url` are empty, the SDK falls back to `DefaultAzureCredential` — managed identity, env vars, workload identity, Azure CLI, Visual Studio sign-in, in that order. Set `azblobconfig.managed_identity_client_id` to pick a specific user-assigned identity when the host has more than one. |
 | Encrypted local      | 4       | `cryptconfig.passphrase`                                       | n/a                                                                                                                                                                                                                  |
 | SFTP backend         | 5       | `sftpconfig.endpoint`, `username`, `password` or `private_key` | n/a — SFTP authentication is always explicit.                                                                                                                                                                        |
 | HTTP filesystem      | 6       | `httpconfig.endpoint`                                          | Auth (`username` / `password` / `api_key`) is only what the remote HTTP service requires.                                                                                                                            |
 | FTP backend          | 7       | `ftpconfig.endpoint`, `username`, `password`                   | n/a                                                                                                                                                                                                                  |
 
 **Managed-credential rule of thumb.** When SFTPGo runs on AWS / GCP / Azure with the host's identity already wired (instance profile, GKE workload identity, AKS managed identity, IRSA, etc.), leave the credential fields empty on the user / group / virtual-folder filesystem config — the SDKs pick the host identity up automatically. This is the recommended posture in cloud deployments: nothing sensitive in the SFTPGo data provider, IAM scopes managed at the platform level.
+
+**FTP / HTTP remote directory.** `ftpconfig.remote_directory` / `httpconfig.remote_directory` prepend a server-side starting directory (like the cloud `key_prefix`). It is **not a security boundary** — these backends cannot detect a server-side symlink resolving outside it — so it is opt-in per deployment: the backend name must be listed in the `common.allow_remote_directory` setting (`SFTPGO_COMMON__ALLOW_REMOTE_DIRECTORY`, comma-separated). The gate is enforced at connection time, not on save, so backups restore on nodes where the backend is not enabled; such a stored config is simply rejected at login.
 
 Every user must have `permissions["/"]` set. Permissions are a map `virtual path → operation tokens`: `*` (all), `list`, `download`, `upload`, `overwrite`, `delete` (or `delete_files` + `delete_dirs`), `rename` (or `rename_files` + `rename_dirs`), `create_dirs`, `create_symlinks`, `chmod`, `chown`, `chtimes`, `copy`. Longest-prefix match wins.
 
@@ -339,10 +341,11 @@ The critical choices an AI agent must get right:
 
 ### 2.11 Operational recipes
 
-- **Reset a lost admin password**: `sftpgo resetpwd --admin <username>`. Interactive prompt; also disables 2FA on that admin. Not for the memory provider. Stop SFTPGo first when using embedded bolt / SQLite; safe to run live on shared PostgreSQL / MySQL / CockroachDB. On Windows: `"C:\Program Files\SFTPGo\sftpgo.exe" resetpwd --admin <username> -c "C:\ProgramData\SFTPGo Enterprise"`.
+- **Restore admin access**: `sftpgo resetadmin --admin <username>` with combinable flags `--reset-password` (interactive prompt), `--reset-two-factor`, `--reset-restrictions` (re-enable admin, clear IP allow list, re-enable password auth — for allow-list lockouts; password and 2FA preserved). Legacy `resetpwd` = `--reset-password --reset-two-factor`. Not for the memory provider. Stop SFTPGo first when using embedded bolt / SQLite; safe to run live on shared PostgreSQL / MySQL / CockroachDB. On Windows: `"C:\Program Files\SFTPGo\sftpgo.exe" resetadmin --admin <username> --reset-password -c "C:\ProgramData\SFTPGo Enterprise"`.
 - **Rotate logs on demand**: `kill -USR1 $(pgrep -x sftpgo)` on Linux; `sftpgo service rotatelogs` on Windows.
 - **Reload TLS certs after swapping files on disk** (file-based certs only): `systemctl reload sftpgo` (Linux) / `sftpgo service reload` (Windows, sends `paramchange`). Without a manual reload the built-in 8-hour file watcher will pick the new files up on its own. UI- and ACME-managed certs reload immediately on save / renewal.
 - **Dump / restore data**: `POST /api/v2/dumpdata` / `POST /api/v2/loaddata` or WebAdmin Maintenance. Portable across DB types and supported upgrade paths.
+- **Rotate the KMS master key / migrate provider**: `sftpgo convertsecrets --new-master-key <key>` (or `--new-master-key-path`, or `--no-master-key`) and/or `--target-provider local|aes256gcm|<external-KMS-URL>` (external KMS plugin must be configured); default is report-only, add `--execute`. Re-encrypts every stored secret onto the new key/provider; keep the current key in config during the run and switch the config only after. SQL providers only; on a networked SQL DB it runs live, and a master key ring (active key in `master_key`/`_path`, decrypt-only keys in `additional_master_keys`/`additional_master_keys_path`) makes the rotation zero-downtime. `--execute` writes a `dumpdata` backup first (secrets encrypted with the current key — restoring needs it) unless `--skip-backup`.
 
 ### 2.12 Reading the logs
 

@@ -527,16 +527,16 @@ A common reason to enable TUS is fronting SFTPGo with Cloudflare (or any CDN tha
 
 ## 7. Operational recipes
 
-### 7.1 Reset a lost administrator password
+### 7.1 Restore access for an administrator
 
 Run on the host where SFTPGo is installed (the command loads the data provider directly, no HTTP call):
 
 ```shell
-sudo sftpgo resetpwd --admin <username>                       # Linux
-"C:\Program Files\SFTPGo\sftpgo.exe" resetpwd --admin <username> -c "C:\ProgramData\SFTPGo Enterprise"   # Windows
+sudo sftpgo resetadmin --admin <username> --reset-password    # Linux
+"C:\Program Files\SFTPGo\sftpgo.exe" resetadmin --admin <username> --reset-password -c "C:\ProgramData\SFTPGo Enterprise"   # Windows
 ```
 
-The command prompts for the new password (plus confirmation) and also **disables 2FA on that admin** so the account is immediately usable — the admin can re-enable 2FA from the WebAdmin after signing in.
+Combinable flags select what to reset: `--reset-password` (interactive prompt plus confirmation), `--reset-two-factor` (disable 2FA — the admin can re-enable it from the WebAdmin after signing in), `--reset-restrictions` (re-enable the admin, clear its IP allow list and re-enable password authentication — for lockouts from a misconfigured allow list, disabled status, or an OIDC-only admin with the IdP unavailable; logs each removed restriction, password and 2FA preserved). The legacy `resetpwd` command equals `resetadmin --reset-password --reset-two-factor`.
 
 - Not supported for the `memory` data provider.
 - **Stop the service first** when using an embedded provider (`bolt` or `sqlite`) — they are single-writer and the command can corrupt the DB if SFTPGo is running against it.
@@ -566,6 +566,10 @@ Use the REST API `POST /api/v2/dumpdata` and `POST /api/v2/loaddata` (or the Web
 ### 7.5 Reconcile stored names after changing `naming_rules`
 
 Enabling the lowercase or trim bits of `data_provider.naming_rules` on an installation that already holds non-conforming names makes those users/folders/groups/roles/event objects return 404: lookups are normalized while stored rows are not. `sftpgo convertnames` reports the mismatches (and any blocking collision) without modifying data; `sftpgo convertnames --execute` renames them with a single statement that changes only the name column (secrets carry their own encryption context and keep working). It is idempotent and re-runnable. Run it with the instance stopped (SQLite); conversion is available for the SQL providers, on bolt only the report is produced, memory is out of scope. PostgreSQL/MySQL/CockroachDB default collations are case-insensitive, so there the conversion is portability oriented. Not applicable on SaaS.
+
+### 7.6 Rotate the KMS master key or migrate provider
+
+The KMS master key (`kms.secrets.master_key`/`_path`) is global and not stored per secret: every stored secret is decrypted with the currently configured key, so changing it in config locks you out of the existing secrets. `sftpgo convertsecrets` re-encrypts every stored secret (filesystem credentials, 2FA secrets and recovery codes, event action and config secrets) onto a new key and/or provider. Rotate a weak key: keep the current key in config, `sftpgo convertsecrets --new-master-key <key> --execute`, then update config to the new key. Migrate provider (e.g. `local`→`aes256gcm` after the default changed): `--target-provider aes256gcm`, or the full provider URL of an external KMS whose plugin is configured. Report-only without `--execute`; writes a `dumpdata` backup first unless `--skip-backup`; resumable (re-run skips already-migrated). SQL providers only; stop the instance for embedded SQLite, run it live on a networked SQL DB. This re-wraps the stored CryptFs passphrase under the new key without changing its value — DARE files are not re-uploaded; changing the passphrase value itself is the separate op that needs re-upload. Not applicable on SaaS. Zero-downtime on a networked SQL DB (PostgreSQL/MySQL/CockroachDB), single instance or cluster: a **master key ring** — active key in `master_key`/`_path`, decrypt-only keys in `additional_master_keys` (list) or `additional_master_keys_path` (file, one key per line) — lets the running instances decrypt old+new at once. Runbook: active `OLD` + additional `[NEW]` (stage) → active `NEW` + additional `[OLD]` (promote) → `convertsecrets --execute` live → active `NEW` only (retire, after a dry run reports nothing left).
 
 ---
 
