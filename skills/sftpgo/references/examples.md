@@ -762,7 +762,7 @@ POST /api/v2/events/rules
 
 ## Patterns worth copying
 
-- **Every JSON body** — always pipe dynamic strings through `toJsonUnquoted` (inside `"…"` positions) or emit them via `toJson` (unquoted positions). Never concatenate raw.
+- **Every JSON body** — always pipe dynamic strings through `toJsonUnquoted` (inside `"..."` positions) or emit them via `toJson` (unquoted positions). Never concatenate raw.
 - **Every nil-able access** — guard `.Initiator.User` / `.Initiator.Admin` (both can be nil — `.Initiator` is only resolved for provider events), `.Object.User` / `.Object.Admin` with `{{if ...}}`.
 - **Every time value** — use `.Timestamp.UTC.Format "layout"` where `layout` is the Go reference time `2006-01-02T15:04:05Z`. Don't try to format an int.
 - **Every OIDC template** — the role and email are not auto-populated on `.Role` / `.Email` for IDP-login events. To use them inside the template, add the corresponding claim names to the binding's `custom_fields` and read with `{{index .IDPFields "claim"}}`.

@@ -76,7 +76,7 @@ For a local-backend user that's all you need: `username`, `password`, `home_dir`
 - **Tagged unions**: `filesystem.provider` is an integer that selects which `*config` sub-object applies (e.g. `provider: 1` → `s3config`). Other sub-objects are ignored. The same pattern is used on Event Action configurations (`BaseEventActionOptions`): `type` picks the active sub-config. The enum descriptions in the OpenAPI spec document this mapping — but nothing enforces it in JSON Schema terms, so agents must remember it.
 - **Secret envelope**: any field that holds a secret (passwords in filesystem configs, service account JSON, API keys for event actions, SMTP passwords, etc.) uses the shape `{"status": "Plain", "payload": "<value>"}` on write. On read the status becomes the encrypted-status of the active KMS (`AES-256-GCM` for the default built-in KMS, `Secretbox` for the `local://` provider, otherwise `AWS` / `GCP` / `VaultTransit` / `AzureKeyVault` / `OracleKeyVault`) with `payload` set to the ciphertext and `key` / `additional_data` blanked out. To **preserve** the current secret during an update, send back any non-Plain non-empty envelope — the simplest form is `{"status": "AES-256-GCM"}` (use whatever encrypted status the `GET` showed). Sending `{"status": "Plain", "payload": "newvalue"}` replaces it; `{"status": "Plain", "payload": ""}` clears it. The User-level `password` scalar (top-level, not a secret envelope) is preserved by **omitting** it from the body.
 - **Idempotency**: `POST` creates every time (no upsert). `PUT /users/{username}` is a full-object replace; omitted fields reset to default. Use `GET` → mutate → `PUT` to update safely.
-- **Status codes**: `201 Created` with `Location` header on creation; `200 OK` on update; `400` for validation (message is the user-visible reason); `403` for permission; `409` for unique-key conflicts.
+- **Status codes**: `201 Created` with `Location` header on creation; `200 OK` on update; `400` for validation (message is the user-visible reason); `403` for permission; `409` for conflicts, for example a unique key already in use.
 
 ---
 
@@ -84,7 +84,7 @@ For a local-backend user that's all you need: `username`, `password`, `home_dir`
 
 ### 3.1 Users and permissions
 
-Per-backend required fields. `home_dir` is mandatory in the database for every user, but the API auto-fills it when the payload omits it: it joins `data_provider.users_base_dir` (set to `/srv/sftpgo/data` by default on Linux APT/RPM packages, empty on the shipped `sftpgo.json` / Docker / Windows installer) with the username. So on packaged Linux installs `home_dir` is effectively optional in the payload; on Docker / Windows install it (or set `users_base_dir` once).
+Per-backend required fields. `home_dir` is mandatory in the database for every user, but the API auto-fills it when the payload omits it: it joins `data_provider.users_base_dir` (set to `/srv/sftpgo/data` by default on Linux APT/RPM packages, empty on the shipped `sftpgo.json` / Docker / Windows installer) with the username. A user carrying a role that isolates its resources takes the role's own `local.users_base_dir`. So on packaged Linux installs `home_dir` is effectively optional in the payload; on Docker / Windows install it (or set `users_base_dir` once).
 
 | Provider             | Integer | Required fields                                                | Auth (when explicit fields are omitted)                                                                                                                  |
 | -------------------- | ------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,7 +122,7 @@ Three group types. Only **one** can be Primary per user; any number of Secondary
 | Secondary  | `2`         | Any number     | Additive: extra virtual folders, per-path permissions, IP filters, share policies, WebClient permissions.                                 |
 | Membership | `3`         | Any number     | **Nothing inherited.** Pure tag for event-rule conditions / admin scoping.                                                                |
 
-Placeholders accepted in group values: `%username%`, `%role%`, `%custom1%..%customN%` (from `filters.custom_placeholders`). Apply in `home_dir`, `key_prefix`, `remote_directory` (FTP/HTTP), `starting_directory`, virtual folder `virtual_path`, SFTP/FTP/HTTP backend `username`.
+Placeholders accepted in group values: `%username%`, `%role%`, `%custom1%..%customN%` (from `filters.custom_placeholders`). Apply in `home_dir`, `key_prefix`, `remote_directory` (FTP/HTTP), `starting_directory`, virtual folder `virtual_path` / `subpath` / `exposed_subpaths`, SFTP/FTP/HTTP backend `username`.
 
 Full narrative (what *each* field merges how, common patterns, gotchas): [groups.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/groups.md). Worked example: [tutorials/groups-example.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/groups-example.md).
 
@@ -133,6 +133,8 @@ A virtual folder is a mount point: a backend-agnostic storage location made avai
 **When you actually need a virtual folder**: cross-backend mounts (home on local, `/archive` on S3); shared space across many users with its own quota; a folder whose backend credentials are managed separately from the user's.
 
 **When you do NOT need one**: carving up a single backend into per-user sub-paths (use `home_dir` or `key_prefix` placeholders instead); giving one user multiple subdirs of their own home (just create them); tagging "this folder contains project data" (use a naming convention or `description`).
+
+**Sub-path mounts**: a mapping can carry `subpath` (re-roots the mount onto a sub-path of the folder; the same folder can be mapped multiple times with distinct subpaths; a group mapping with `/tenants/%username%` gives each member their own sub-tree of one shared folder) or `exposed_subpaths` (Enterprise: mounts only the listed sub-paths as directories under the virtual path; one mapping row scales to thousands of entries, keeping logins fast). Mutually exclusive per mapping; quota limits are folder-wide — equal on every mapping of the same folder. On FTP/HTTP folders the sub-path applies to `remote_directory` and follows its `allow_remote_directory` gate.
 
 Full detail: [virtual-folders.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/virtual-folders.md).
 
@@ -159,6 +161,8 @@ Tutorial + operational detail: [tutorials/shares.md](https://raw.githubuserconte
 
 SFTPGo does not implement SAML — only OIDC.
 
+**Configuring OIDC.** Check the edition ([`editions.md`](editions.md) — `role_values` / `user_role_values`, `max_age`, `prompt`, RP-initiated logout, Azure B2C and the WebAdmin OIDC form are Enterprise-only; OSS matches the hardcoded claim value `admin`) and whether the user is on the SaaS ([`saas.md`](saas.md) — Standard+, WebAdmin only, managed restart). On Enterprise with `SFTPGO_HOOK__ENABLE_OIDC_UI=1` the form is under **Server Manager > Configurations > OpenID Connect** and stores one global configuration; otherwise the configuration is per binding under `httpd.bindings[N].oidc`. Required: `config_url`, `client_id`, `client_secret` (omit for a public client), `redirect_base_url`, `username_field` — plus `<redirect_base_url>/web/oidc/redirect` registered with the IdP. Claim choice, role mapping and troubleshooting: [oidc.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/oidc.md#configuration-from-the-webadmin-ui).
+
 **Prefer OIDC + Event Manager over pre-login hooks** for modern deployments. The IdP event + `template_user` / `template_admin` actions cover provisioning, role mapping, and group assignment without running a custom hook process.
 
 ### 3.6 Event Manager
@@ -170,7 +174,7 @@ This is the deepest area of the skill — see the dedicated reference files:
 - `trigger-types.md` — each trigger and which template fields it populates
 - `action-types.md` — each action type and the sub-config it expects
 - `template-context.md` — every key exposed to templates
-- `template-functions.md` — the registered function map (`toJson`, `humanizeBytes`, …)
+- `template-functions.md` — the registered function map (`toJson`, `humanizeBytes`, ...)
 - `examples.md` — ready-to-paste templates (chat webhooks, OIDC JIT, retention reports, ICAP, staged uploads, command hooks)
 - `pitfalls.md` — the common mistakes
 
@@ -204,6 +208,7 @@ If the user asks *"how do I automate X"* — produce the full POST payload.
 | Local user logs in OK but first upload / `mkdir` fails with "permission denied" | OS-level: the service runs as the `sftpgo` system user (Linux APT/YUM) or `LOCAL SYSTEM` (Windows). A custom `home_dir` outside `/srv/sftpgo` (Linux) / the installer default (Windows) needs to be writable by that account. On Linux: `chown -R sftpgo:sftpgo <home>` and `chmod +x` the parents. |
 | File visible in `ls` but cannot be opened                    | `filters.file_patterns` with `deny_policy: 0` for the path                                                                           |
 | File not visible at all                                      | `filters.file_patterns` with `deny_policy: 1` (hide)                                                                                 |
+| Whole subtree missing, or a `file_patterns` entry on a subdirectory has no effect | A directory **name** is matched against the filter of its **parent** path; an entry describes what its own path contains. With `deny_policy: 1` and a non-empty `allowed_patterns` on the parent, add the subdirectory name to the parent's `allowed_patterns` |
 | Event rule doesn't fire                                      | `options.names` / `options.role_names` / `options.group_names` conditions exclude the subject, or the trigger type doesn't match     |
 | Template renders empty string                                | Referenced key is not populated for that trigger (see the "Placeholder picker" table in SKILL.md)                                    |
 | Share returns 404                                            | Share expired, IP restriction, path no longer exists, owning user disabled, or share path violates `filters.allowed_share_paths` / `filters.denied_share_paths` (checked at runtime, so tightening the filter blocks pre-existing shares) |
@@ -254,7 +259,7 @@ grep '"sender":"httpd"' /srv/sftpgo/logs/sftpgo.log \
   | jq -c 'select(.resp_status >= 500) | {time, method, uri, resp_status, remote_addr}'
 ```
 
-On Docker / Kubernetes the logs are on stdout, so the JSON is directly consumable by any log aggregator (Loki, CloudWatch, Stackdriver, Datadog, Splunk…) without a sidecar. For the full schema of each record type see [logs.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/logs.md) in the public docs.
+On Docker / Kubernetes the logs are on stdout, so the JSON is directly consumable by any log aggregator (Loki, CloudWatch, Stackdriver, Datadog, Splunk...) without a sidecar. For the full schema of each record type see [logs.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/logs.md) in the public docs.
 
 ---
 

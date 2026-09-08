@@ -1,6 +1,6 @@
 # SFTPGo — Single-File AI Reference
 
-**Source of truth**: this file. Self-contained; paste it into any AI's context (ChatGPT, Gemini, Cursor, Copilot, Claude, …) before asking for help on SFTPGo REST API payloads, WebAdmin configuration, server deployment, environment variables, or Event Action templates. Verified against SFTPGo v2.7.x.
+**Source of truth**: this file. Self-contained; paste it into any AI's context (ChatGPT, Gemini, Cursor, Copilot, Claude, ...) before asking for help on SFTPGo REST API payloads, WebAdmin configuration, server deployment, environment variables, or Event Action templates. Verified against SFTPGo v2.7.x.
 
 **Scope covered**
 
@@ -17,7 +17,7 @@
 | Need                                                                      | Source                                                                                                                                                                                  |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Field names, enum values, schema shape, required fields                   | OpenAPI spec: `https://sftpgo.com/assets/openapi.yaml` (latest release) or the `openapi/openapi.yaml` shipped with the deployed installation (older but authoritative for that server). |
-| Operational how-to (install, storage, groups, shares, OIDC, tutorials, …) | Public docs at `https://docs.sftpgo.com/enterprise/` — mirrored at `https://github.com/sftpgo/docs` branch `enterprise`. Raw markdown: `https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/<file>.md` |
+| Operational how-to (install, storage, groups, shares, OIDC, tutorials, ...) | Public docs at `https://docs.sftpgo.com/enterprise/` — mirrored at `https://github.com/sftpgo/docs` branch `enterprise`. Raw markdown: `https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/<file>.md` |
 | Task → file cheat sheet for the public docs                               | `documentation-map.md` in the docs repo.                                                                                                                                                |
 | Disambiguation of SFTPGo-specific terms                                   | `glossary.md` in the docs repo.                                                                                                                                                         |
 | Ready-to-paste Event Action templates with both WebAdmin and REST forms   | [`skills/sftpgo/references/examples.md`](skills/sftpgo/references/examples.md) in this repo.                                                                                            |
@@ -48,7 +48,7 @@ Send the matching sub-object for the selected `type`. Other sub-objects are zero
 
 ### 1.3 Secret envelope
 
-Every secret-typed field on the JSON payload (backend credentials, API keys, service account JSON, IMAP/SMTP passwords, OIDC client secret, share password, …) uses an envelope:
+Every secret-typed field on the JSON payload (backend credentials, API keys, service account JSON, IMAP/SMTP passwords, OIDC client secret, share password, ...) uses an envelope:
 
 ```json
 {"status": "Plain", "payload": "your-secret"}
@@ -72,7 +72,7 @@ The server validates, encrypts, and stores it. On `GET` the same envelope comes 
     "s3config": {
       "bucket": "my-bucket",
       "region": "eu-west-1",
-      "access_key": "AKIA…",
+      "access_key": "AKIA...",
       "access_secret": {"status": "AES-256-GCM"}
     }
   }
@@ -90,11 +90,11 @@ For the top-level User `password` field (a hashed scalar, not a secret envelope)
 - `POST` creates every time; there is no built-in upsert. If the unique key already exists the endpoint returns `409 Conflict`.
 - `PUT /api/v2/<resource>/<id>` is a **full-object replace**. Omitted fields are reset to default.
 - Safe update pattern: `GET` → mutate in memory → `PUT`. When mutating only a few fields, make sure you round-trip the ones you did not touch.
-- Status codes: `201 Created` + `Location` header on creation, `200 OK` on update, `400` validation error (message is the actual reason — read it), `403` permission, `404` not found, `409` unique-key conflict.
+- Status codes: `201 Created` + `Location` header on creation, `200 OK` on update, `400` validation error (message is the actual reason — read it), `403` permission, `404` not found, `409` conflict, for example a unique key already in use.
 
 ### 1.5 User payload minimum (per backend)
 
-Every user must end up with a `home_dir`. If the payload omits it, the server fills it as `<users_base_dir>/<username>` when `data_provider.users_base_dir` is set. The Linux APT / RPM packages set `users_base_dir` to `/srv/sftpgo/data` by default, so on packaged Linux installs `home_dir` is effectively optional in the API payload. The shipped `sftpgo.json`, the Docker image, and the Windows installer leave it empty — there `home_dir` must be supplied (or `users_base_dir` configured) for every new user.
+Every user must end up with a `home_dir`. If the payload omits it, the server fills it as `<users_base_dir>/<username>` when `data_provider.users_base_dir` is set. For a user carrying a role that isolates its resources the role's own `local.users_base_dir` is used instead, and the global setting does not apply. The Linux APT / RPM packages set `users_base_dir` to `/srv/sftpgo/data` by default, so on packaged Linux installs `home_dir` is effectively optional in the API payload. The shipped `sftpgo.json`, the Docker image, and the Windows installer leave it empty — there `home_dir` must be supplied (or `users_base_dir` configured) for every new user.
 
 `home_dir` is held in the database for every backend, including cloud / remote ones. For S3 / GCS / Azure / SFTP / FTP / HTTP it isn't used for the actual data path (files stream through pipes), but it still has to exist as an absolute path on disk; the simplest answer is to set `users_base_dir` once and stop thinking about it.
 
@@ -123,7 +123,11 @@ Every user must have `permissions["/"]` set. Permissions are a map `virtual path
 | Secondary  | `2`         | Any number     | Additive: extra virtual folders, per-path permissions, IP filters, share policies, WebClient permissions.                                  |
 | Membership | `3`         | Any number     | **Nothing is inherited.** Pure tag for event-rule conditions.                                                                              |
 
-Placeholders accepted inside group values: `%username%`, `%role%`, `%custom1%…%customN%` (from `filters.custom_placeholders`). Apply in `home_dir`, `key_prefix`, `starting_directory`, virtual-folder `virtual_path`, SFTP backend `username`.
+Placeholders accepted inside group values: `%username%`, `%role%`, `%custom1%...%customN%` (from `filters.custom_placeholders`). Apply in `home_dir`, `key_prefix`, `starting_directory`, virtual-folder `virtual_path` / `subpath` / `exposed_subpaths`, SFTP/FTP/HTTP backend `username` and `remote_directory`. A placeholder with no value for a user (`%role%` on a user without a role, `%customN%` beyond that user's list) **refuses that user's login**, with an error naming the setting; the defender does not score it. Virtual folder sub-paths are the exception: that mapping is left unmounted and the login succeeds. A `%customN%` outside the supported range is refused when the group is saved.
+
+**Role-scoped catalogs (Enterprise).** Groups and virtual folders carry a `role` field. With `resource_isolation` on that role, an account reaches the groups and folders of its own role only (resources carrying no role, or a role that does not isolate, form one shared set for every other account); a mismatch refuses the login (HTTP 409 on the API), a save naming a cross-role resource fails validation as for a name that does not exist, a role admin cannot save a user or group that already holds a cross-role reference (the error names a global administrator), and every user / group / folder save is measured against the role's `settings.storage_allowlist`: `allowed_providers` is default-deny, a granted backend with no entries admits what its credentials reach, and the role declares its own `local.users_base_dir`. Global admins set the role of a group or folder from the WebAdmin selector or the `role` field; a role admin never sets it, its creates take its role and its updates keep the stored one. See `editions.md`.
+
+**Virtual folder sub-path mounts.** A mapping can target a sub-path of the folder: `subpath` re-roots the mount (the same folder can be mapped multiple times with distinct subpaths), `exposed_subpaths` (Enterprise) mounts only the listed sub-paths as directories under the virtual path — one mapping row scales to thousands of entries, keeping logins fast. Canonical `/`-leading paths, mutually exclusive per mapping; quota limits are folder-wide (equal on every mapping of the same folder). Group values accept the placeholders above, with one exception to the login-refusal rule: a sub-path a user cannot render, or one whose render keeps fewer path segments than the configured text, leaves that mapping unmounted for that user while the login succeeds — the value is never rendered with an empty placeholder, so `/tenants/%role%` never falls back to `/tenants`. A sub-path nested under another entry of the same list is accepted: it mounts content the outer entry already serves. On FTP/HTTP folders the sub-path applies to `remote_directory` and follows its `allow_remote_directory` gate (see §1.5).
 
 ### 1.7 Shares
 
@@ -131,7 +135,15 @@ Scope integers: `1` read, `2` write, `3` read+write. Options: password, expirati
 
 ### 1.8 External identity providers
 
-SFTPGo supports **OIDC** for external IdPs (Microsoft Entra ID / B2C, Google Workspace, Okta, Keycloak, Auth0, Authentik, …) and **LDAP / Active Directory** as an authentication source. SAML is not implemented.
+SFTPGo supports **OIDC** for external IdPs (Microsoft Entra ID / B2C, Google Workspace, Okta, Keycloak, Auth0, Authentik, ...) and **LDAP / Active Directory** as an authentication source. SAML is not implemented.
+
+**OIDC — settle these three before answering:**
+
+1. **Edition** (§2.15). Enterprise-only: the WebAdmin OIDC form, `role_values` / `user_role_values`, `max_age`, `prompt`, RP-initiated logout, `ui_name`, Azure B2C issuer overrides. On OSS the admin role is the hardcoded claim value `admin` (exact, case-sensitive match) and an identity carrying it is refused on the WebClient login page; on Enterprise, while `user_role_values` is unset every role may sign in to the WebClient.
+2. **SaaS or self-hosted** (§2.14). On the SaaS, OIDC is Standard+ and is configured from the WebAdmin only; saving triggers a managed restart.
+3. **WebAdmin or file config** (§2.2). The form stores one global configuration for every HTTP binding; file / env-var config is per binding under `httpd.bindings[N].oidc`.
+
+Required settings: `config_url` (discovery base URL, SFTPGo appends `/.well-known/openid-configuration`), `client_id`, `client_secret` (omit for a public client — PKCE must stay enabled), `redirect_base_url`, `username_field`. Register `<redirect_base_url>/web/oidc/redirect` with the IdP as an allowed redirect URI. Pick a `username_field` claim the IdP keeps unique and never reassigns: its value is the SFTPGo account that gets access. A login refused with `Invalid OpenID token` after a successful IdP authentication means the configured claim carried no value: the server log names the configured claim and lists the ones the token carries. `username_field` takes the claim name alone, so stray quotes or spaces never match — quotes are stripped by `env.d` files and by systemd `EnvironmentFile`, not by a Docker `--env-file`, a compose `environment:` list entry or a WebAdmin form field. Claim choice, role mapping, UserInfo claims, verified email and troubleshooting are in [oidc.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/oidc.md); JIT provisioning is §3 here plus [tutorials/eventmanager-idp.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/eventmanager-idp.md).
 
 ---
 
@@ -181,12 +193,12 @@ These are env-var-only flags (no UI / API equivalent) and they take effect at pr
 
 LDAP and Geo-IP are plugin-based integrations: a separate plugin binary plus a plugin slot under the license are required, so the WebAdmin Configurations entries for them are wired to plugin setup rather than to a self-contained toggle. Refer the user to the [LDAP plugin guide](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/plugins/ldap-auth.md) and the Geo-IP plugin docs for the full setup; the SaaS / marketplace offerings come with these wired up already.
 
-For **OIDC** specifically: the WebAdmin UI stores a single OIDC configuration in the database. The OIDC redirect URL is a single URL registered with the IdP, so the OIDC flow is served by the listener whose hostname matches the configured `redirect_base_url` — typically the primary one. To configure OIDC per HTTPD binding (e.g. different IdPs for internal admin and external client), use file or env-var config under `httpd.bindings[N].oidc` — the UI cannot express that.
+For **OIDC** specifically: the WebAdmin UI stores a single OIDC configuration in the database and a service restart applies it. The OIDC redirect URL is a single URL registered with the IdP, so the OIDC flow is served by the listener whose hostname matches the configured `redirect_base_url` — typically the primary one. To configure OIDC per HTTPD binding (e.g. different IdPs for internal admin and external client), use file or env-var config under `httpd.bindings[N].oidc` — the UI cannot express that. Field-by-field mapping between the form and the configuration parameters: [oidc.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/oidc.md#configuration-from-the-webadmin-ui).
 
 ### 2.3 Environment variable naming rule
 
 ```text
-SFTPGO_<SECTION>__<KEY>[__<SUBKEY>…]
+SFTPGO_<SECTION>__<KEY>[__<SUBKEY>...]
 ```
 
 - Prefix: `SFTPGO_` (one underscore).
@@ -249,9 +261,10 @@ SFTPGO_COMMON__DEFENDER__BAN_TIME=60
 
 # ACME (Let's Encrypt) — prefer the WebAdmin UI (Server Manager → Configurations
 # → ACME). For headless / scripted setups, use file-based config as below and
-# run `sftpgo acme run --database-protocols 7` once to register and obtain the
-# first certificate; renewals are then automatic.
-#   --database-protocols bitmask: 1 HTTPS, 2 FTPS, 4 WebDAV (combinable; 7 = all)
+# run `sftpgo acme run` once to register and obtain the first certificate;
+# renewals are then automatic.
+#   --database-protocols bitmask: 1 HTTPS, 2 FTPS, 4 WebDAV, 8 telemetry
+#   (combinable; default 15 = all)
 #   key_type: 2048 / 3072 / 4096 / 8192 (RSA) or P256 / P384 (ECDSA)
 SFTPGO_ACME__EMAIL=ops@example.com
 SFTPGO_ACME__KEY_TYPE=4096
@@ -260,6 +273,9 @@ SFTPGO_ACME__HTTP01_CHALLENGE__PORT=80
 
 # Telemetry + metrics + profiler (internal only; port 10000 is the convention,
 # hardcoded by the official Helm chart and used throughout the docs)
+# For HTTPS set certificate_file/certificate_key_file, or select Telemetry among
+# the protocols of the ACME/TLS certificate stored in the database: that one is
+# shared by every node and takes precedence over the files.
 SFTPGO_TELEMETRY__BIND_ADDRESS=127.0.0.1
 SFTPGO_TELEMETRY__BIND_PORT=10000
 SFTPGO_TELEMETRY__ENABLE_PROFILER=true
@@ -276,7 +292,7 @@ SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1
 SFTPGO_LICENSE_KEY=XXXX-XXXX-XXXX-XXXX
 ```
 
-**About memory pipes.** On cloud storage backends (S3 / GCS / Azure Blob), each transfer streams through a per-upload pipe. By default that pipe is file-backed and requires a writable local temp directory. On distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC there is no such directory, and uploads fail with errors like "unable to open pipe" / "read-only file system". Setting `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` makes transfers fully in-memory. Higher RAM per concurrent transfer, but no filesystem dependency. Already the default on SFTPGo cloud-marketplace offerings.
+**About memory pipes.** On cloud storage backends (S3 / GCS / Azure Blob), each transfer streams through a per-upload pipe. By default that pipe is file-backed and created in the user's `home_dir` (the mapped path for a virtual folder), which must be a writable local directory. On distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC there is no such directory, and uploads fail with errors like "unable to open pipe" / "read-only file system". Setting `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` makes transfers fully in-memory. Higher RAM per concurrent transfer, but no filesystem dependency. An SFTP download streams the file from its beginning and releases what the client has read past, keeping `SFTPGO_HOOK__MEMORY_PIPES__SPARSE_RETENTION` bytes behind it (4 MB default): a read that falls further behind fails naming the requested offset and the minimum allowed, and the difference between the two is how much to add to that variable. Already the default on SFTPGo cloud-marketplace offerings.
 
 ### 2.7 Schema init & migrations
 
@@ -307,7 +323,7 @@ docker run -d --name sftpgo \
   registry.sftpgo.com/sftpgo/sftpgo:<tag>
 ```
 
-Host dirs must be writable by UID `1000` (`chown -R 1000:1000 /srv/sftpgo-data /srv/sftpgo-config` — no Linux user with UID 1000 needed on the host). With Docker / Docker Compose use `-e` flags or the `environment:` block / Compose `env_file:` directive — that's the idiomatic way to pass `SFTPGO_…` env vars in containers. The `<config-dir>/env.d/` mechanism is mostly useful for systemd-packaged installs; mounting it inside a container works but adds nothing over plain env vars. Distroless images on cloud-only deployments must set `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1`.
+Host dirs must be writable by UID `1000` (`chown -R 1000:1000 /srv/sftpgo-data /srv/sftpgo-config` — no Linux user with UID 1000 needed on the host). With Docker / Docker Compose use `-e` flags or the `environment:` block / Compose `env_file:` directive — that's the idiomatic way to pass `SFTPGO_...` env vars in containers. The `<config-dir>/env.d/` mechanism is mostly useful for systemd-packaged installs; mounting it inside a container works but adds nothing over plain env vars. Distroless images on cloud-only deployments must set `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1`.
 
 ### 2.10 Kubernetes — shape and SFTPGo-specific decisions
 
@@ -371,7 +387,6 @@ grep '"sender":"httpd"' /srv/sftpgo/logs/sftpgo.log \
 
 ### 2.13 Deployment pitfalls
 
-- **Avoid setting `common.temp_path`.** Leave empty unless you have a specific reason — a path on a different filesystem from user homes causes atomic renames to fall back to copy+delete.
 - **Cloud backend upload fails with "unable to open pipe" / "read-only file system" / "no space left"** → SFTPGo cannot create a file-backed pipe in the configured temp dir. Fix: enable memory pipes (`SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1`). Mandatory for distroless / read-only rootfs / pods without a writable PVC; already default on marketplace offerings.
 - **Local user "permission denied" on upload while login succeeds** → the APT/YUM packages run under a dedicated `sftpgo` system account; a `home_dir` outside `/srv/sftpgo` you created as root is unreadable/unwritable by it. Fix on Linux: `chown -R sftpgo:sftpgo <home>` and `chmod +x` the parents. On Windows: grant the service account (`LOCAL SYSTEM` by default) write access on the chosen tree via `icacls`.
 - **`proxy_protocol=2` without populated `proxy_allowed`** → every connection is rejected. Configure both together.
@@ -407,7 +422,7 @@ Configuration changes that trigger a short restart: **OIDC**, **LDAP**, **first-
 
 Custom domain: DNS **CNAME** pointing a customer subdomain (e.g. `sftp.example.com`) to the dedicated address we emailed the customer at activation. The IP behind that address is static under normal operation, so an A record technically works; we recommend a CNAME because the IP can change in rare events such as a region migration or major infrastructure rework — we always notify the customer ahead of time. Apex / root domains can't use CNAME (DNS standards limitation); use a subdomain or a provider-specific ALIAS / CNAME-flattening record. Once the CNAME resolves, the customer either declares the new domain themselves from **Server Manager → Configurations → Automatic Certificates (Let's Encrypt)** (one of the changes that triggers a short restart, see above), or emails support and we apply it server-side via CLI. The Let's Encrypt certificate is issued during that step, not automatically from the CNAME alone. Whichever path is chosen, **keep the original assigned hostname in the cert list** — it's how we monitor the instance.
 
-What NOT to suggest to a SaaS user: `systemctl` / `Restart-Service` / `docker run` / Helm values / `sftpgo resetpwd` / editing `sftpgo.json` / setting `SFTPGO_…` env vars / the Backup event action. All of §2.1–2.13 above is off-limits on the SaaS. Use WebAdmin forms and REST API only.
+What NOT to suggest to a SaaS user: `systemctl` / `Restart-Service` / `docker run` / Helm values / `sftpgo resetpwd` / editing `sftpgo.json` / setting `SFTPGO_...` env vars / the Backup event action. All of §2.1–2.13 above is off-limits on the SaaS. Use WebAdmin forms and REST API only.
 
 **Marketplace offerings ≠ SaaS.** AWS / Azure / GCP cloud-marketplace listings are self-hosted — the customer owns the VM or managed K8s namespace. They can edit env files and run CLI commands. Use §2.1–2.13 for them.
 
@@ -417,7 +432,7 @@ Almost everything in this reference targets the **Enterprise** edition. The **Op
 
 - The full Go template engine with `toJson` / helpers / conditions / loops (most examples in §3 and in `examples.md` assume this).
 - Action types: **ICAP**, **IMAP**, **event reports** (type 19), **PGP**, **execute-before-file-publish** staged uploads, enhanced copy with source disposition / glob / retries, data retention with archival.
-- OIDC role mapping, PKCE-without-secret, session control, Azure B2C, custom labels.
+- OIDC beyond the basics: configurable `role_values` / `user_role_values` (OSS matches the hardcoded claim value `admin`), session control (`max_age`, `prompt`), RP-initiated logout, custom login label (`ui_name`), Azure B2C issuer overrides, `disabled_security_features` (turns PKCE off — never suggest it, PKCE is on by default in both editions), and the WebAdmin OIDC form. PKCE itself and secretless public clients work on OSS too.
 - WebClient WOPI / Collabora, TUS resumable uploads. (TUS works on Enterprise even in limited mode — no license needed; opt in per HTTPD binding via `upload_chunk_size > 0`.)
 - Share email authentication, group governance, path / scope restrictions.
 - Cloud backend performance optimizations (memory pipes / small-file speedups), GCS HNS, SFTP backend SOCKS proxy, FTP backend.
@@ -447,7 +462,7 @@ SFTPGo Event Actions execute in response to triggers (filesystem events, provide
 The engine differs by edition — and sections §3.2 through §3.6 below all describe the **Enterprise** behavior:
 
 - **Enterprise** — full Go `text/template` (not Handlebars, not Jinja, not `html/template`). Conditionals (`{{if}}{{end}}`), iteration (`{{range}}{{end}}`), `{{with}}`, pipes (`{{.X | toJson}}`), and an extended `FuncMap` (§3.3). Structured accessors like `{{.Object.User.Email}}` and `{{index .IDPFields "claim"}}` work. Templates are compiled at action-save time, so a syntax error rejects the `POST/PUT` with a validation error; a semantic mistake (referencing a field the trigger does not populate) silently renders as the empty string / zero value at runtime.
-- **Open Source** — a flat `strings.Replacer` pass over a fixed list of dot-prefixed placeholders. The shape (`{{.Name}}`, `{{.VirtualPath}}`, …) is identical to Enterprise, but it is **string substitution only** — no conditionals, no ranges, no functions, no nested accessors. Tokens not in the fixed list survive verbatim in the output, which is the most common "why is `{{toJson .X}}` showing up literally in my webhook" symptom on OSS.
+- **Open Source** — a flat `strings.Replacer` pass over a fixed list of dot-prefixed placeholders. The shape (`{{.Name}}`, `{{.VirtualPath}}`, ...) is identical to Enterprise, but it is **string substitution only** — no conditionals, no ranges, no functions, no nested accessors. Tokens not in the fixed list survive verbatim in the output, which is the most common "why is `{{toJson .X}}` showing up literally in my webhook" symptom on OSS.
 
 OSS placeholder list (everything else — `{{if}}`, `{{range}}`, pipes, `{{.Object.User.X}}`, `{{index .IDPFields "k"}}` — does **not** work on OSS):
 
@@ -597,8 +612,8 @@ The action's integer `type` field selects which sub-configuration is read from `
 ```json
 {
   "mode": 0,                 // 0 = create/update, 1 = create only
-  "template_user": "…",      // Go template rendering JSON User
-  "template_admin": "…"      // Go template rendering JSON Admin
+  "template_user": "...",      // Go template rendering JSON User
+  "template_admin": "..."      // Go template rendering JSON Admin
 }
 ```
 
@@ -632,10 +647,10 @@ A template that references a field the trigger does not populate **renders an em
 
 1. **Missing dot prefix** — `{{Name}}` is invalid; use `{{.Name}}`. Old snippets that omit the dot are wrong.
 2. **`.IDPFields` only contains what `custom_fields` lists.** The OIDC binding's `custom_fields` array is the single source of what ends up in `.IDPFields` — SFTPGo does not auto-fold the role or email claims into it. The `role_field` setting drives JIT user/admin shape but is **not** copied to `.IDPFields` or to `.Role` on the event. If you need the role or email in your template, add the same claim name to `custom_fields` and read it via `index .IDPFields "claim_name"`. Missing claim → `nil`. This is the #1 OIDC template bug.
-3. **Claim values can be strings or arrays.** When the IdP returns a JSON array (e.g. Entra ID `groups`, Keycloak realm roles), `.IDPFields.claim` is `[]any`. Use `slicesContains` rather than `eq` to test membership: `{{if slicesContains (index .IDPFields "groups") "sftp-admins"}}…{{end}}`.
-4. **Always guard `.Initiator.User` / `.Initiator.Admin`.** `.Initiator` is never nil, but `.User` and `.Admin` can both be nil — for filesystem events, IP blocks, certificate events, schedules, and on-demand runs the initiator is unset. Guard with `{{if .Initiator.User}}…{{end}}` / `{{if .Initiator.Admin}}`.
+3. **Claim values can be strings or arrays.** When the IdP returns a JSON array (e.g. Entra ID `groups`, Keycloak realm roles), `.IDPFields.claim` is `[]any`. Use `slicesContains` rather than `eq` to test membership: `{{if slicesContains (index .IDPFields "groups") "sftp-admins"}}...{{end}}`.
+4. **Always guard `.Initiator.User` / `.Initiator.Admin`.** `.Initiator` is never nil, but `.User` and `.Admin` can both be nil — for filesystem events, IP blocks, certificate events, schedules, and on-demand runs the initiator is unset. Guard with `{{if .Initiator.User}}...{{end}}` / `{{if .Initiator.Admin}}`.
 5. **`.Object` is a lazy wrapper, not the object.** Use `{{.Object.User.Username}}` or `{{.Object.JSON}}` — not `{{.Object.Username}}`.
-6. **JSON embedding.** Inside `"…"` positions: `{{.X | toJsonUnquoted}}`. In unquoted positions: `{{toJson .X}}`. Never hand-roll quoting.
+6. **JSON embedding.** Inside `"..."` positions: `{{.X | toJsonUnquoted}}`. In unquoted positions: `{{toJson .X}}`. Never hand-roll quoting.
 7. **`stringReplace` order.** `stringReplace s old new` — source first, then old, then new (same as `strings.ReplaceAll`).
 8. **`pathJoin` takes a `[]string`.** Build with `stringSlice`: `{{pathJoin (stringSlice "/base" .Name)}}`.
 9. **Trailing-slash delete.** `fs_config.type=2` with a path ending in `/` empties the directory but keeps it; without `/` the directory is removed. Running the path through `pathJoin` strips the slash.

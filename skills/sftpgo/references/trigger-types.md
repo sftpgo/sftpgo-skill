@@ -34,7 +34,7 @@ Rule condition filter (`fs_events`) selects among:
 - `rename` — both `.VirtualPath` / `.FsPath` (source) and `.VirtualTargetPath` / `.FsTargetPath` (destination) set.
 - `mkdir`, `rmdir` — path fields; no size.
 - `copy` — source and target paths set.
-- `ssh_cmd` — `.VirtualPath` / `.FsPath` are the path the SSH command operated on (e.g. the target of `scp -t /tmp/file`), and `.ObjectName` is its basename. The actual SSH command string (`scp`, `sha1sum`, …) is **not** exposed to the template — only the legacy external `actions.execute_on` hook receives it via the `SFTPGO_ACTION_SSH_CMD` env var.
+- `ssh_cmd` — `.VirtualPath` / `.FsPath` are the path the SSH command operated on (e.g. the target of `scp -t /tmp/file`), and `.ObjectName` is its basename. The actual SSH command string (`scp`, `sha1sum`, ...) is **not** exposed to the template — only the legacy external `actions.execute_on` hook receives it via the `SFTPGO_ACTION_SSH_CMD` env var.
 
 Sync vs async: only `upload`, `pre-upload`, `pre-download`, `pre-delete` are accepted in a rule whose action has `relation_options.execute_sync = true`. All other fs events run async regardless of the flag.
 

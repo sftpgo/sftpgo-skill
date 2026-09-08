@@ -109,11 +109,11 @@ Any answer that assumes the customer owns the host is wrong. Specifically do **n
 
 - `systemctl restart sftpgo` / `Restart-Service sftpgo` / `docker restart` / `kubectl rollout`.
 - Editing `sftpgo.json`, `/etc/sftpgo/env.d/*.env`, or any other config file.
-- Setting environment variables (`SFTPGO_…`) — customers have no way to deliver them.
+- Setting environment variables (`SFTPGO_...`) — customers have no way to deliver them.
 - `sftpgo resetpwd` / `sftpgo initprovider` / `sftpgo service reload` / any other CLI subcommand.
-- `docker run …` / Helm values / `docker-compose.yml` recipes.
+- `docker run ...` / Helm values / `docker-compose.yml` recipes.
 - Backup via the Event Manager **Backup** action — it's disabled on SaaS. If the customer asks how to back up their data, explain that we run automated daily backups, and if they want an **additional** copy they can set up an Event Manager rule that copies files (or a dump via the REST API) to their own storage.
-- Changing `temp_path`, upload mode, or any other server-level setting that lives in the config file. These are set for the whole SaaS fleet.
+- Changing the upload mode or any other server-level setting that lives in the config file. These are set for the whole SaaS fleet.
 
 ## 5. What to suggest instead
 

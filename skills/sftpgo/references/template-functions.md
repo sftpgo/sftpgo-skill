@@ -110,7 +110,7 @@ Whitespace trimming: `{{-` trims preceding whitespace, `-}}` trims following whi
 
 Do not use:
 
-- Helm / Sprig functions (`default`, `coalesce`, `nindent`, `trim`, …) — these are not registered.
+- Helm / Sprig functions (`default`, `coalesce`, `nindent`, `trim`, ...) — these are not registered.
 - Jinja-style filters with `|` that look like Sprig — only the functions above work with the pipe.
 - `printf` with non-Go verbs (e.g. no Python `%(name)s` syntax).
 - External includes, partials, or file reads.

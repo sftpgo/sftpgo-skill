@@ -65,7 +65,7 @@ The binary looks for a file named `sftpgo.<ext>` inside the configured *config d
 | Docker image             | `/var/lib/sftpgo` (override with `-c`) |
 | Windows installer        | `C:\ProgramData\SFTPGo Enterprise`  |
 
-The config directory can be overridden with the `-c <path>` flag on every `sftpgo` command (`serve`, `initprovider`, `service install`, …). On Linux the packaged systemd unit sources `/etc/sftpgo/sftpgo.env` as `EnvironmentFile` and loads every regular file under `/etc/sftpgo/env.d/` before starting. On Windows the service reads every regular file from `C:\ProgramData\SFTPGo Enterprise\env.d\` at startup. The `.env` suffix used in examples is only a convention — the loader accepts any file name.
+The config directory can be overridden with the `-c <path>` flag on every `sftpgo` command (`serve`, `initprovider`, `service install`, ...). On Linux the packaged systemd unit sources `/etc/sftpgo/sftpgo.env` as `EnvironmentFile` and loads every regular file under `/etc/sftpgo/env.d/` before starting. On Windows the service reads every regular file from `C:\ProgramData\SFTPGo Enterprise\env.d\` at startup. The `.env` suffix used in examples is only a convention — the loader accepts any file name.
 
 **Recommendation**: do not edit the shipped `sftpgo.json`. Keep it at defaults and put all your changes in env files under `env.d/` — this way, package upgrades that ship a new default config do not conflict with your edits. The same applies on Windows: use `C:\ProgramData\SFTPGo Enterprise\env.d\` rather than rewriting `sftpgo.json`.
 
@@ -82,7 +82,7 @@ These are env-var-only flags (no UI / API equivalent) and they take effect at pr
 
 LDAP and Geo-IP are plugin-based integrations: a separate plugin binary plus a plugin slot under the license are required, so the WebAdmin Configurations entries for them are wired to plugin setup rather than to a self-contained toggle. Refer the user to the [LDAP plugin guide](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/plugins/ldap-auth.md) and the Geo-IP plugin docs for the full setup; the SaaS / marketplace offerings come with these wired up already.
 
-A notable case: **OIDC**. The WebAdmin UI stores a single OIDC configuration in the database; the OIDC redirect URL is one URL registered with the IdP, so the OIDC flow is served by the listener whose hostname matches the configured `redirect_base_url` — typically the primary one. To configure OIDC per HTTPD binding (different IdPs on different listeners, e.g. an internal-only WebAdmin OIDC plus a customer-facing WebClient OIDC), use file or env-var config under `httpd.bindings[N].oidc` — the UI cannot express that.
+A notable case: **OIDC**. The WebAdmin UI stores a single OIDC configuration in the database and a service restart applies it; the OIDC redirect URL is one URL registered with the IdP, so the OIDC flow is served by the listener whose hostname matches the configured `redirect_base_url` — typically the primary one. To configure OIDC per HTTPD binding (different IdPs on different listeners, e.g. an internal-only WebAdmin OIDC plus a customer-facing WebClient OIDC), use file or env-var config under `httpd.bindings[N].oidc` — the UI cannot express that. Field-by-field mapping between the form and the configuration parameters: [oidc.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/oidc.md#configuration-from-the-webadmin-ui).
 
 ---
 
@@ -93,7 +93,7 @@ This is the single rule an AI agent must get right — the binary silently ignor
 ### 3.1 The naming rule
 
 ```text
-SFTPGO_<SECTION>__<KEY>[__<SUBKEY>…]
+SFTPGO_<SECTION>__<KEY>[__<SUBKEY>...]
 ```
 
 - Prefix: `SFTPGO_` (one underscore).
@@ -167,11 +167,11 @@ Example layout (Linux):
 
 ```text
 /etc/sftpgo/env.d/
-├── 10-bindings.env          # SFTPGO_SFTPD__BINDINGS__…, SFTPGO_HTTPD__BINDINGS__…
-├── 20-data-provider.env     # SFTPGO_DATA_PROVIDER__…
-├── 30-telemetry.env         # SFTPGO_TELEMETRY__…
-├── 40-acme.env              # SFTPGO_ACME__…
-└── 90-plugins.env           # SFTPGO_PLUGINS__…
+├── 10-bindings.env          # SFTPGO_SFTPD__BINDINGS__..., SFTPGO_HTTPD__BINDINGS__...
+├── 20-data-provider.env     # SFTPGO_DATA_PROVIDER__...
+├── 30-telemetry.env         # SFTPGO_TELEMETRY__...
+├── 40-acme.env              # SFTPGO_ACME__...
+└── 90-plugins.env           # SFTPGO_PLUGINS__...
 ```
 
 Equivalent on Windows:
@@ -219,6 +219,8 @@ SFTPGO_DATA_PROVIDER__SSLMODE=1
 
 No manual schema step is needed. With the default `data_provider.update_mode = 0`, SFTPGo creates the schema on first startup and applies any pending migrations on every subsequent startup — just create the empty database and restart the service.
 
+**Rotating database credentials** (`SFTPGO_DATA_PROVIDER__PASSWORD_PROVIDER`, postgresql and mysql): `aws` generates an AWS RDS/Aurora IAM authentication token for each new connection (default AWS credentials chain, `AWS_REGION` must be resolvable; single database host only, tokens are endpoint-bound), `azure` requests a Microsoft Entra ID access token (default Azure credentials chain; `AZURE_CLIENT_ID` selects a user-assigned managed identity), `file` re-reads `password_file` for each new connection so an external agent (Vault Agent, Kubernetes secrets provider) can rotate it — rotation must replace the file atomically (rename), an empty file is an error; `file` also works with cockroachdb. `aws` and `azure` require an `sslmode` that guarantees TLS: 1-3 for postgresql, 1-2 for mysql (a custom `connection_string` owns its TLS setup); for RDS server cert verification set `root_cert` to the RDS certificate bundle (Amazon private CAs).
+
 Run `sftpgo initprovider` only if you set `update_mode = 1` to disable automatic init/migration (for example, when the runtime DB credentials are intentionally restricted and have no DDL privileges, and you apply schema changes from an ops role under human control):
 
 - Linux: `sftpgo initprovider -c /etc/sftpgo`
@@ -251,7 +253,7 @@ When you replace the cert files on disk (e.g. after obtaining a new certificate 
 
 ### 5.4 HTTPS via built-in ACME (Let's Encrypt)
 
-**Recommended: WebAdmin UI.** Navigate to **Server Manager → Configurations → ACME** and fill the form: email, domain, selected protocols (HTTPS / FTPS / WebDAV), HTTP-01 port. On save, SFTPGo obtains the certificate and stores it encrypted in the database; renewal is then automatic, managed by the running service. This is the preferred path — no CLI command, no file-based config, HA-replicated.
+**Recommended: WebAdmin UI.** Navigate to **Server Manager → Configurations → ACME** and fill the form: email, domain, selected protocols (HTTPS / FTPS / WebDAV / Telemetry), HTTP-01 port. On save, SFTPGo obtains the certificate and stores it encrypted in the database; renewal is then automatic, managed by the running service. This is the preferred path — no CLI command, no file-based config, HA-replicated.
 
 For headless / scripted deployments you can drive ACME from file-based config (`sftpgo.json` → `acme.*`, or env vars):
 
@@ -265,10 +267,10 @@ SFTPGO_ACME__HTTP01_CHALLENGE__PORT=80
 `key_type` accepts `2048`, `3072`, `4096`, `8192` (RSA) or `P256` / `P384` (ECDSA). With file-based config you must then **run the one-shot command** to register the ACME account and obtain the first certificate — this writes it to the database and activates automatic renewal from then on:
 
 ```shell
-sftpgo acme run --database-protocols 7
+sftpgo acme run
 ```
 
-`--database-protocols` is a bitmask: `1` HTTPS, `2` FTPS, `4` WebDAV (combinable; `7` = all). Use HTTP-01 when port 80 is reachable; use DNS-01 when it isn't.
+`--database-protocols` is a bitmask: `1` HTTPS, `2` FTPS, `4` WebDAV, `8` telemetry (combinable; default `15` = all). Re-running the command with a different value updates the protocols of the stored certificate, which the services pick up at the next restart. Use HTTP-01 when port 80 is reachable; use DNS-01 when it isn't.
 
 ### 5.5 Enable the Defender (intrusion detection)
 
@@ -470,7 +472,7 @@ For a **distroless** or **distroless-plugins** image on a cloud-only deployment,
 
 ### 5.11 Memory pipes for cloud backends
 
-On cloud storage backends (S3, GCS, Azure Blob) SFTPGo needs a writable local directory for per-transfer temporary files used to stream data between the client and the backend. When the host has no usable local filesystem — read-only containers (distroless, scratch images), Kubernetes pods with ephemeral emptyDir memory-backed volumes, deployments where `temp_path` is on a full or non-writable partition — transfers fail before any bytes reach the backend.
+On cloud storage backends (S3, GCS, Azure Blob) SFTPGo needs a writable local directory for per-transfer temporary files used to stream data between the client and the backend. When the host has no usable local filesystem — read-only containers (distroless, scratch images), Kubernetes pods with ephemeral emptyDir memory-backed volumes, deployments where the users' `home_dir` is on a full or non-writable partition — transfers fail before any bytes reach the backend.
 
 Enable fully in-memory transfers so no temp file is created:
 
@@ -505,23 +507,22 @@ A common reason to enable TUS is fronting SFTPGo with Cloudflare (or any CDN tha
   ```
 
   On Windows, grant the service account (default `LOCAL SYSTEM`) read/write on the chosen home-dir tree via the directory properties or `icacls`.
-- **Avoid setting `common.temp_path`.** Leave it empty unless you have a specific reason. If set to a path on a different filesystem from the user home directories, atomic renames fall back to copy-then-delete — slower and non-atomic. The default (empty) is the right choice for the vast majority of deployments. The setting is on a deprecation path; new deployments should not adopt it.
-- **Cloud backend uploads fail on a read-only / ephemeral host.** Symptoms: "unable to open pipe", "read-only file system", or "no space left" shortly after the client starts uploading to an S3 / GCS / Azure Blob user. Cause: SFTPGo tries to create a file-backed pipe in the configured temp dir and cannot. Fix: enable memory pipes — `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` (see §5.11). Strongly recommended for distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC; already the default on marketplace offerings. Memory pipes are an Enterprise feature; on the OSS build file-backed pipes are the only option, so make sure the temp dir is on writable storage with enough headroom.
+- **Cloud backend uploads fail on a read-only / ephemeral host.** Symptoms: "unable to open pipe", "read-only file system", or "no space left" shortly after the client starts uploading to an S3 / GCS / Azure Blob user. Cause: SFTPGo tries to create a file-backed pipe in the user's `home_dir` (the mapped path for a virtual folder) and cannot. Fix: enable memory pipes — `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` (see §5.11). Strongly recommended for distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC; already the default on marketplace offerings. Memory pipes are an Enterprise feature; on the OSS build file-backed pipes are the only option, so make sure `home_dir` is on writable storage with enough headroom.
 - **Proxy mode `2` without populated allow-list.** Setting `proxy_protocol=2` rejects every connection until `proxy_allowed` contains your load balancer's IP / CIDR. Configure both in the same deploy step.
 - **`allowlist_status=1` before populating the list.** Enabling it empty drops everything. Populate the allow list (via WebAdmin or REST API) first, then flip the flag.
 - **Changing tagged-union fields without the sub-config.** Switching `data_provider.driver` from `sqlite` to `postgresql` requires setting `host`, `port`, `username`, `password`, `name`, `sslmode` in the same change — otherwise the server starts but cannot reach the database.
 - **Running `initprovider` unnecessarily.** It is not a required first-boot step. With `update_mode = 0` (the default) SFTPGo initializes and migrates the schema on every startup. Only flip to `update_mode = 1` if the runtime credentials lack DDL privileges, and run `initprovider` from an ops role before each upgrade.
-- **Concurrent migrations across multiple SFTPGo instances.** PostgreSQL serializes them via `pg_advisory_lock`; concurrent SFTPGo startups against the same PostgreSQL cluster are safe. MySQL/MariaDB and CockroachDB don't expose an equivalent advisory-lock primitive that SFTPGo can rely on, and MySQL/CockroachDB also can't wrap DDL in a transaction (so a forcibly-aborted migration can leave the schema in an intermediate state). For those engines, coordinate startup from the operator side — either start instances sequentially on first deploy and on every version bump, or set `update_mode = 1` everywhere and run `sftpgo initprovider` from a single one-shot job (CI step, Helm post-upgrade hook, …) before rolling out.
+- **Concurrent migrations across multiple SFTPGo instances.** PostgreSQL serializes them via `pg_advisory_lock`; concurrent SFTPGo startups against the same PostgreSQL cluster are safe. MySQL/MariaDB and CockroachDB don't expose an equivalent advisory-lock primitive that SFTPGo can rely on, and MySQL/CockroachDB also can't wrap DDL in a transaction (so a forcibly-aborted migration can leave the schema in an intermediate state). For those engines, coordinate startup from the operator side — either start instances sequentially on first deploy and on every version bump, or set `update_mode = 1` everywhere and run `sftpgo initprovider` from a single one-shot job (CI step, Helm post-upgrade hook, ...) before rolling out.
 - **MySQL transaction isolation.** MySQL/MariaDB default to `REPEATABLE READ`, which uses gap locks on index ranges. Under high write concurrency (a wave of bulk user updates, sync jobs hitting tens of users in parallel) this surfaces as `Deadlock found when trying to get lock; try restarting transaction` in the SFTPGo logs. Set `transaction-isolation = READ-COMMITTED` in `my.cnf` and restart MySQL — that removes the gap-lock contention. PostgreSQL has no such issue at the default isolation level.
 - **env.d files do not override the process environment.** If a value is already exported (systemd `EnvironmentFile`, container env), editing env.d has no effect. Move the setting to the authoritative source, or clear the process-level value first.
 - **Package upgrade merging.** Upstream ships default `sftpgo.json`; `dpkg`/`rpm` may prompt about your local edits. Keeping your overrides in `env.d/` entirely avoids the conflict.
 - **TLS file-based cert reload latency.** After replacing `certificate_file` / `certificate_key_file` on disk, the in-memory keys stay stale until the built-in 8-hour file watcher (size + mtime check) picks the new files up. To force an immediate reload use `systemctl reload sftpgo` (Linux) / `sftpgo service reload` (Windows — sends `paramchange`). Certs managed via the WebAdmin UI or refreshed by the built-in ACME client are reloaded immediately on save / renewal — no action needed.
-- **List-of-struct indexes are dense.** `SFTPGO_SFTPD__BINDINGS__0__PORT` and `…__2__PORT` without a `__1__` leaves a gap — the binary will not assume index 1 exists. Use contiguous indices.
+- **List-of-struct indexes are dense.** `SFTPGO_SFTPD__BINDINGS__0__PORT` and `...__2__PORT` without a `__1__` leaves a gap — the binary will not assume index 1 exists. Use contiguous indices.
 - **`disabled` on bindings.** To turn off a binding set its port to `0`; do not rely on a phantom `disabled` flag.
 - **Log file rotation.** The binary rotates by size; if you use `logrotate` with `copytruncate` you'll occasionally lose a few lines. Prefer `postrotate` + `SIGHUP` via the SFTPGo systemd unit's own rotation, or disable external rotation. On Windows rotation is signalled with `sftpgo service rotatelogs`.
-- **Windows service account.** The installer registers the service as `LOCAL SYSTEM`. If you change the account (via `sftpgo service uninstall` + `sftpgo service install --service-user …` or the Services UI), make sure the new account can read the config directory, the license key, and the home directories — and, if you bind privileged ports, retains the right to do so.
+- **Windows service account.** The installer registers the service as `LOCAL SYSTEM`. If you change the account (via `sftpgo service uninstall` + `sftpgo service install --service-user ...` or the Services UI), make sure the new account can read the config directory, the license key, and the home directories — and, if you bind privileged ports, retains the right to do so.
 - **Windows path escaping in env files.** Use literal backslashes in single-quoted values (`'C:\path'`) or double-escaped (`"C:\\path"`) in double-quoted values. Forward slashes also work and sidestep the escaping question (`C:/ProgramData/SFTPGo Enterprise/tls/fullchain.pem`).
-- **Secret leak in logs.** SFTPGo redacts secrets in its own startup log (`config file used: '…', config loaded: {…}`), but it cannot redact what systemd echoes. Do **not** use `systemd-cat`/`journalctl` `LogLevel=debug` on the unit in a way that dumps env files.
+- **Secret leak in logs.** SFTPGo redacts secrets in its own startup log (`config file used: '...', config loaded: {...}`), but it cannot redact what systemd echoes. Do **not** use `systemd-cat`/`journalctl` `LogLevel=debug` on the unit in a way that dumps env files.
 
 ---
 
@@ -575,7 +576,7 @@ The KMS master key (`kms.secrets.master_key`/`_path`) is global and not stored p
 
 ## 8. Quick reference — where to look next
 
-| You need…                                                              | Fetch                                                                                                      |
+| You need...                                                              | Fetch                                                                                                      |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | The full list of config parameters (every section, every field)        | [config-file.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/config-file.md)             |
 | The env var convention authoritative doc + extra `SFTPGO_HOOK__*` vars | [env-vars.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/env-vars.md)                   |
