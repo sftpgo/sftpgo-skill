@@ -9,8 +9,5 @@
   "homepage": "https://github.com/sftpgo/sftpgo-skill",
   "upstream": "https://sftpgo.com",
   "license": "Apache-2.0",
-  "keywords": ["sftpgo", "sftp", "event-actions", "templates", "oidc", "rest-api"],
-  "skills": [
-    "skills/sftpgo"
-  ]
+  "keywords": ["sftpgo", "sftp", "event-actions", "templates", "oidc", "rest-api"]
 }
