@@ -2,7 +2,7 @@
 
 An event rule declares a `trigger` (integer). The trigger determines which keys of the template context are populated. Using a field that the trigger doesn't populate yields an empty string at render time, not a template error — the #2 source of "silent bugs" after `.IDPFields`.
 
-**Source of truth:** SFTPGo Event Manager runtime behavior (verified against v2.7.x).
+**Source of truth:** SFTPGo Event Manager runtime behavior (verified against v2.8.x).
 
 ## Table
 
@@ -30,7 +30,7 @@ Rule condition filter (`fs_events`) selects among:
 
 - `upload`, `pre-upload`, `first-upload` — `.FsPath` / `.VirtualPath` set; `.FileSize` set after completion (post-upload), `0` for `pre-upload`.
 - `download`, `pre-download`, `first-download` — same path fields; `.FileSize` set post-download.
-- `delete`, `pre-delete` — path fields set; `.FileSize` is the size being deleted.
+- `delete`, `pre-delete` — path fields set; `.FileSize` is the size being deleted. `pre-delete` also fires when a rename or copy overwrites an existing file and when an SFTP truncate makes a file smaller.
 - `rename` — both `.VirtualPath` / `.FsPath` (source) and `.VirtualTargetPath` / `.FsTargetPath` (destination) set.
 - `mkdir`, `rmdir` — path fields; no size.
 - `copy` — source and target paths set.
@@ -58,7 +58,7 @@ Rule condition filters: `provider_objects` (`user`, `folder`, `group`, `admin`, 
 
 ### trigger 3 — Schedule (cron)
 
-`.Name` is the rule name — the action runs as a system executor. To target specific users, use the rule's `conditions.options.names` and other filters.
+`.Name` is the rule name — the action runs as a system executor. To target specific users, use the rule's `conditions.options.names` and other filters. A tick that fires while the previous run of the same rule is still in progress is skipped (logged with the rule name), so a rule slower than its interval runs less often than the cron expression says.
 
 No `.Event`, `.VirtualPath`, `.Status`, etc. — it's a wall-clock trigger. But if the rule chains actions like "1. Data Retention → 2. Email", the Email action will see `.RetentionChecks` populated by action 1. `.Initiator` resolves to no User and no Admin.
 

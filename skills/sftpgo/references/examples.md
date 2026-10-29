@@ -7,7 +7,7 @@ Each example shows **two forms**:
 
 When a rule is needed to wire the action to a trigger, the corresponding `POST /api/v2/events/rules` body is shown below the action.
 
-All examples have been validated against SFTPGo v2.7.x.
+All examples have been validated against SFTPGo v2.8.x.
 
 ---
 

@@ -2,7 +2,7 @@
 
 SFTPGo Event Action templates are rendered with Go `text/template`. The functions below are registered in the custom `FuncMap` and are available in **every** template field (email subject/body, HTTP body/endpoint/headers, command args/env, IDP user/admin JSON, filesystem paths, etc.).
 
-**Source of truth:** SFTPGo template function registry (verified against v2.7.x).
+**Source of truth:** SFTPGo template function registry (verified against v2.8.x).
 
 In addition to these custom functions, all standard `text/template` functions and operators are available: `printf`, `print`, `println`, `len`, `index`, `slice`, `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `and`, `or`, `not`, `call`, `html`, `js`, `urlquery`.
 
@@ -49,6 +49,7 @@ Example:
 | ------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `stringSlice`      | `(args ...string) []string`          | Build a slice literal.                                                                                           |
 | `stringJoin`       | `(strs []string, sep string) string` | `strings.Join` — slice first, separator second.                                                                   |
+| `stringSplit`      | `(s, sep string) []string`           | `strings.Split`; a leading `/` yields an empty element 0, so `index (stringSplit .VirtualPath "/") 1` is the first directory. |
 | `stringTrimSuffix` | `(s, suffix string) string`          | `strings.TrimSuffix`                                                                                             |
 | `stringTrimPrefix` | `(s, prefix string) string`          | `strings.TrimPrefix`                                                                                             |
 | `stringReplace`    | `(s, old, new string) string`        | `strings.ReplaceAll` — source first, then old, then new.                                                          |

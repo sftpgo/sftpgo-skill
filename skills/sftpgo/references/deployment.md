@@ -24,10 +24,12 @@ The authoritative references are the public docs. Fetch them by raw URL when det
 
 Without a valid license SFTPGo runs in **limited mode** with the following restrictions:
 
-- Concurrent transfers are capped at 2.
+- Concurrent transfers are capped at 2 (event actions that read or write files count too, see `pitfalls.md` #27).
 - Plugins are disabled (count = 0).
 - Only the local filesystem is available as a storage backend.
-- Event Manager actions PGP, ICAP, Identity Provider account check, and Event report are unavailable.
+- Event Manager actions PGP, Metadata check, ICAP, Identity Provider account check, and Event report are unavailable.
+
+The license concurrent-transfer cap is enforced per node: each node of a cluster needs its own license.
 
 The commercial licensed tiers (used both on-premises and on cloud marketplaces) are **Starter**, **Premium**, and **Ultimate** — see `https://sftpgo.com/on-premises` for the feature matrix.
 
@@ -42,7 +44,7 @@ sudo apt update && sudo apt upgrade      # Azure / GCP — Debian
 
 The SFTPGo service is restarted automatically by the package's post-install scriptlet when the `sftpgo` package is upgraded — no manual `systemctl restart` is required.
 
-Check the running SFTPGo version with `sftpgo --version`; the same version string is also logged at service startup (`starting SFTPGo v2.7.x ...`, visible via `journalctl -u sftpgo` or in the configured log file). Marketplace offerings hide the version in the WebAdmin by default, so on those instances the CLI and the startup logs are the canonical sources. Container-based marketplace listings have their own update procedure documented on each listing page: the AWS Container listing distributes images through the AWS marketplace registry and is updated by deploying the new image version published by the listing; the Azure AKS listing is a CNAB bundle and is upgraded through its CNAB mechanism. The generic [docker.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/docker.md) covers self-hosted containers from `registry.sftpgo.com` — it does not apply to the marketplace container listings, which use the marketplace's own registry / packaging.
+Check the running SFTPGo version with `sftpgo --version`; the same version string is also logged at service startup (`starting SFTPGo v2.8.x ...`, visible via `journalctl -u sftpgo` or in the configured log file). Marketplace offerings hide the version in the WebAdmin by default, so on those instances the CLI and the startup logs are the canonical sources. Container-based marketplace listings have their own update procedure documented on each listing page: the AWS Container listing distributes images through the AWS marketplace registry and is updated by deploying the new image version published by the listing; the Azure AKS listing is a CNAB bundle and is upgraded through its CNAB mechanism. The generic [docker.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/docker.md) covers self-hosted containers from `registry.sftpgo.com` — it does not apply to the marketplace container listings, which use the marketplace's own registry / packaging.
 
 **Marketplace pricing — what to tell customers.** All marketplace listings — both Enterprise and open-source-based — are billed entirely through the cloud provider; there is no separate fee from SFTPGo on top of the marketplace charge. Enterprise listings include an activated SFTPGo Enterprise license (nothing else to purchase or activate); open-source-based listings ship the SFTPGo Open Source edition (AGPLv3) and do not enable Enterprise features. To access Enterprise features, the customer switches to one of the Enterprise listings. Answer pricing questions in terms of what the customer pays for and what they get — do not speculate about how the marketplace charge is split between compute and software. Authoritative reference: the "Pricing and licensing" callout in [installation.md `## Commercial Marketplaces`](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/installation.md).
 
@@ -259,12 +261,12 @@ For headless / scripted deployments you can drive ACME from file-based config (`
 
 ```shell
 SFTPGO_ACME__EMAIL=ops@example.com
-SFTPGO_ACME__KEY_TYPE=4096
+SFTPGO_ACME__KEY_TYPE=P256
 SFTPGO_ACME__DOMAINS=sftp.example.com
 SFTPGO_ACME__HTTP01_CHALLENGE__PORT=80
 ```
 
-`key_type` accepts `2048`, `3072`, `4096`, `8192` (RSA) or `P256` / `P384` (ECDSA). With file-based config you must then **run the one-shot command** to register the ACME account and obtain the first certificate — this writes it to the database and activates automatic renewal from then on:
+`key_type` (default `P256`) accepts `2048`, `3072`, `4096`, `8192` (RSA) or `P256` / `P384` (ECDSA). With file-based config you must then **run the one-shot command** to register the ACME account and obtain the first certificate — this writes it to the database and activates automatic renewal from then on:
 
 ```shell
 sftpgo acme run
@@ -283,6 +285,8 @@ SFTPGO_COMMON__DEFENDER__THRESHOLD=15
 
 Use `driver=provider` to persist the ban list across restarts (single-node SQLite is fine) and to share it across nodes when on MySQL/PostgreSQL/CockroachDB. `memory` is the fastest option when persistence is not required.
 
+Against connection floods (TLS handshakes or SSH key exchanges dropped before login) add `SFTPGO_COMMON__DEFENDER__MAX_INCOMPLETE_CONNECTIONS=200` (default `0` = off): a source closing that many connections per minute before logging in is scored, and banned sources are then refused before any handshake on every protocol. Counts are per node. See [defender.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/defender.md#incomplete-connections).
+
 ### 5.6 Expose metrics + enable the profiler (internal network only)
 
 ```shell
@@ -300,10 +304,11 @@ See `profiling.md` in the public docs for the `/debug/pprof` endpoints and `metr
 
 ```shell
 SFTPGO_COMMON__PROXY_PROTOCOL=2
-SFTPGO_COMMON__PROXY_ALLOWED=10.0.0.0/8,192.168.0.0/16
+SFTPGO_COMMON__PROXY_ALLOWED=10.0.0.10,10.0.0.11
+SFTPGO_COMMON__PROXY_SKIPPED=10.1.0.0/16
 ```
 
-Mode `2` is strict: connections from IPs **not** in `proxy_allowed` that carry a proxy header are rejected. Mode `1` is permissive (unlisted → header ignored).
+Mode `2`: connections from `proxy_allowed` (the load balancers) must send the header, connections from `proxy_skipped` (clients that connect directly, internal monitoring) are served without it, every other source is rejected. Mode `1` is deprecated: use `2` with `proxy_skipped`. Applies to SFTP and FTP/S, and to HTTP/WebDAV bindings with `proxy_mode=1`.
 
 ### 5.8 License key
 
@@ -320,7 +325,7 @@ The chart is **edition-agnostic** — its default `image.repository` is `ghcr.io
 The SFTPGo-specific decisions an AI agent must get right:
 
 - **Expose SFTP via Service `LoadBalancer` / `NodePort`, not Ingress.** SFTP, FTP, and WebDAV are plain TCP — a standard HTTP Ingress controller cannot forward them. The HTTP WebAdmin / WebClient *can* sit behind an Ingress. On clouds: AWS NLB, Azure `standard` LB with TCP, GCP TCP LB. An NGINX Ingress with [TCP services ConfigMap](https://kubernetes.github.io/ingress-nginx/user-guide/exposing-tcp-udp-services/) can also forward raw TCP.
-- **Multi-replica needs external DB.** SQLite (bolt, default for distroless) only works single-replica. For `replicaCount > 1`, point at PostgreSQL / MySQL / CockroachDB via Secret-backed env vars. Remember the CockroachDB migration constraint (no `pg_advisory_lock` — serialize startups or use `update_mode=1`).
+- **Multi-replica needs external DB.** SQLite (bolt, default for distroless) only works single-replica. For `replicaCount > 1`, point at PostgreSQL / MySQL / CockroachDB via Secret-backed env vars and set `SFTPGO_DATA_PROVIDER__IS_SHARED=1`; web sessions across replicas depend on the HA license feature (§5.13). Remember the CockroachDB migration constraint (no `pg_advisory_lock` — serialize startups or use `update_mode=1`).
 - **Persistence depends on backend mix.** Local user homes need a PVC; `ReadWriteOnce` is fine for single-replica, `ReadWriteMany` (EFS, Azure Files, Filestore) for multi-replica shared storage. Cloud-backend-only deployments can run with ephemeral storage if memory pipes are enabled.
 - **Memory pipes mandatory on ephemeral / read-only roots.** Distroless pods, pods without a PVC, or pods running on memory-backed `emptyDir` must set `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` or cloud uploads fail. Marketplace AKS / EKS offerings have this preconfigured.
 - **Health probes.** The chart configures liveness/readiness automatically against `/healthz` on the telemetry port (`10000`, fixed). No manual probe config needed. The same port serves Prometheus metrics at `/metrics` and pprof at `/debug/pprof` — do not bind probes to the HTTPD port, which requires auth.
@@ -334,7 +339,7 @@ Minimal cloud-ready values-fragment (distroless + S3 users + external Postgres):
 ```yaml
 image:
   repository: registry.sftpgo.com/sftpgo/sftpgo
-  tag: v2.7.x-distroless-plugins
+  tag: v2.8.x-distroless-plugins
 
 replicaCount: 2
 
@@ -494,6 +499,20 @@ The value also drives the chunk size used by the WebClient. REST API / `tus-js-c
 
 A common reason to enable TUS is fronting SFTPGo with Cloudflare (or any CDN that imposes a per-request body cap): TUS chunks the upload under the cap. See [the Cloudflare tutorial](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/cloudflare.md) for the full env block (proxy IPs, `CF-Connecting-IP`, TLS termination headers).
 
+### 5.13 Multi-node deployments (shared data provider, HA)
+
+Every node: same MySQL / PostgreSQL / CockroachDB database and `SFTPGO_DATA_PROVIDER__IS_SHARED=1`. That alone gives shared users / groups / folders / rules / configs, quotas enforced across nodes, and scheduled rules running on one node at a time. SFTP, FTP and WebDAV behave the same with or without HA. Connection, transfer and rate limits are per node.
+
+The **HA license feature (Ultimate tier)** adds, with `SFTPGO_DATA_PROVIDER__NODE__HOST` / `__PORT` / `__PROTO` set on each node to an address where the other nodes reach its REST API, and the same `signing_passphrase` on every HTTP binding of every node:
+
+| | Without HA | With HA |
+| --- | --- | --- |
+| WebAdmin / WebClient sessions, REST API tokens, share cookies, CSRF | Signed with a random per-node key, `signing_passphrase` ignored: valid only on the issuing node and lost on its restart. Load balancer needs session affinity (cookie for browsers, source IP for REST clients). | Valid on every node and across restarts; no affinity needed. |
+| Changes to event rules/actions, DB configs, IP lists, license | Other nodes reload them from the DB every 10 minutes. | Applied on every node immediately. |
+| Connection list/close, disconnect on user delete or update | Local node only. | Cluster-wide. |
+
+TUS chunked uploads need session affinity in both cases (§5.12). Docs: [clustering.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/clustering.md).
+
 ---
 
 ## 6. Pitfalls
@@ -508,7 +527,7 @@ A common reason to enable TUS is fronting SFTPGo with Cloudflare (or any CDN tha
 
   On Windows, grant the service account (default `LOCAL SYSTEM`) read/write on the chosen home-dir tree via the directory properties or `icacls`.
 - **Cloud backend uploads fail on a read-only / ephemeral host.** Symptoms: "unable to open pipe", "read-only file system", or "no space left" shortly after the client starts uploading to an S3 / GCS / Azure Blob user. Cause: SFTPGo tries to create a file-backed pipe in the user's `home_dir` (the mapped path for a virtual folder) and cannot. Fix: enable memory pipes — `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` (see §5.11). Strongly recommended for distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC; already the default on marketplace offerings. Memory pipes are an Enterprise feature; on the OSS build file-backed pipes are the only option, so make sure `home_dir` is on writable storage with enough headroom.
-- **Proxy mode `2` without populated allow-list.** Setting `proxy_protocol=2` rejects every connection until `proxy_allowed` contains your load balancer's IP / CIDR. Configure both in the same deploy step.
+- **Proxy mode `2` without populated lists.** Setting `proxy_protocol=2` rejects every connection from sources outside `proxy_allowed` (the load balancers) and `proxy_skipped` (direct clients, health checks). Configure all three in the same deploy step.
 - **`allowlist_status=1` before populating the list.** Enabling it empty drops everything. Populate the allow list (via WebAdmin or REST API) first, then flip the flag.
 - **Changing tagged-union fields without the sub-config.** Switching `data_provider.driver` from `sqlite` to `postgresql` requires setting `host`, `port`, `username`, `password`, `name`, `sslmode` in the same change — otherwise the server starts but cannot reach the database.
 - **Running `initprovider` unnecessarily.** It is not a required first-boot step. With `update_mode = 0` (the default) SFTPGo initializes and migrates the schema on every startup. Only flip to `update_mode = 1` if the runtime credentials lack DDL privileges, and run `initprovider` from an ops role before each upgrade.

@@ -187,6 +187,7 @@ The reference data is verified against SFTPGo runtime behavior. When the templat
 
 | This repo tag | SFTPGo version verified against |
 | ------------- | ------------------------------- |
+| `v0.6.0`      | SFTPGo `v2.8.x`                 |
 | `v0.5.0`      | SFTPGo `v2.7.x`                 |
 
 Open an issue if you find a drift — template or payload examples that used to validate but now fail are the main signal.

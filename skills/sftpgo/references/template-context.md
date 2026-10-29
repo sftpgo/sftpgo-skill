@@ -2,7 +2,7 @@
 
 Every SFTPGo Event Action template is rendered with a single map as the dot-context. The keys below are available in **every** template, regardless of trigger. Some keys are only meaningfully populated for specific triggers — the "Populated for" column says when.
 
-**Source of truth:** SFTPGo Event Manager runtime behavior (verified against v2.7.x).
+**Source of truth:** SFTPGo Event Manager runtime behavior (verified against v2.8.x).
 
 ## Top-level keys
 

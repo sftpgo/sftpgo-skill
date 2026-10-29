@@ -75,7 +75,7 @@ For a local-backend user that's all you need: `username`, `password`, `home_dir`
 
 - **Tagged unions**: `filesystem.provider` is an integer that selects which `*config` sub-object applies (e.g. `provider: 1` → `s3config`). Other sub-objects are ignored. The same pattern is used on Event Action configurations (`BaseEventActionOptions`): `type` picks the active sub-config. The enum descriptions in the OpenAPI spec document this mapping — but nothing enforces it in JSON Schema terms, so agents must remember it.
 - **Secret envelope**: any field that holds a secret (passwords in filesystem configs, service account JSON, API keys for event actions, SMTP passwords, etc.) uses the shape `{"status": "Plain", "payload": "<value>"}` on write. On read the status becomes the encrypted-status of the active KMS (`AES-256-GCM` for the default built-in KMS, `Secretbox` for the `local://` provider, otherwise `AWS` / `GCP` / `VaultTransit` / `AzureKeyVault` / `OracleKeyVault`) with `payload` set to the ciphertext and `key` / `additional_data` blanked out. To **preserve** the current secret during an update, send back any non-Plain non-empty envelope — the simplest form is `{"status": "AES-256-GCM"}` (use whatever encrypted status the `GET` showed). Sending `{"status": "Plain", "payload": "newvalue"}` replaces it; `{"status": "Plain", "payload": ""}` clears it. The User-level `password` scalar (top-level, not a secret envelope) is preserved by **omitting** it from the body.
-- **Idempotency**: `POST` creates every time (no upsert). `PUT /users/{username}` is a full-object replace; omitted fields reset to default. Use `GET` → mutate → `PUT` to update safely.
+- **Idempotency**: `POST` creates every time (no upsert). `PUT /users/{username}` is a full-object replace; omitted fields reset to default. Use `GET` → mutate → `PUT` to update safely. For users only, `PATCH /api/v2/users/{username}` (experimental) updates the properties sent and keeps the others; `filters` merges per property, every other property (`permissions`, `filesystem`, lists) is replaced whole.
 - **Status codes**: `201 Created` with `Location` header on creation; `200 OK` on update; `400` for validation (message is the user-visible reason); `403` for permission; `409` for conflicts, for example a unique key already in use.
 
 ---
@@ -144,6 +144,8 @@ Public or password-protected links that expose a subset of the user's namespace 
 
 Per-user / per-group share-path governance: `filters.allowed_share_paths` (gate — when non-empty, share paths must be at or below an entry; `/` is wildcard) and `filters.denied_share_paths` (carve-out; `/` is literal-only). Combined matcher uses longest-prefix-match across both lists; if the same path appears in both, the denied entry takes precedence. Inheritance from groups is additive (union).
 
+`filters.allowed_share_email_domains` (Enterprise): when non-empty, every share must use email authentication and every `options.emails` domain must match an entry exactly (case-insensitive, subdomains listed explicitly). Additive from groups; checked at runtime too.
+
 Tutorial + operational detail: [tutorials/shares.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/shares.md).
 
 ### 3.5 Authentication
@@ -154,7 +156,7 @@ Tutorial + operational detail: [tutorials/shares.md](https://raw.githubuserconte
 | SSH public keys                           | `public_keys` list                                                                                            |
 | OIDC (Entra ID, Okta, Google, Keycloak, Auth0, any compliant IdP) | [oidc.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/oidc.md) + [Event Manager JIT](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/eventmanager-idp.md) |
 | LDAP / Active Directory                   | [LDAP plugin](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/plugins/ldap-auth.md)             |
-| 2FA                                       | [tutorials/two-factor-authentication.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/two-factor-authentication.md) |
+| 2FA                                       | [tutorials/two-factor-authentication.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/tutorials/two-factor-authentication.md). Token requests send the code in `X-SFTPGO-OTP`; disabling 2FA, generating a new secret, changing its protocols or viewing recovery codes also needs the current code (or a recovery code) there, and API keys are refused for 2FA management. `mfa.disable_recovery_codes` turns recovery codes off server-wide |
 | API keys (automation)                     | REST API `/apikeys` — send as `X-SFTPGO-API-KEY`                                                              |
 | Custom auth service (replace built-in)    | [external-auth.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/external-auth.md)            |
 | Modify user on login                      | [dynamic-user-mod.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/dynamic-user-mod.md)      |
@@ -211,7 +213,7 @@ If the user asks *"how do I automate X"* — produce the full POST payload.
 | Whole subtree missing, or a `file_patterns` entry on a subdirectory has no effect | A directory **name** is matched against the filter of its **parent** path; an entry describes what its own path contains. With `deny_policy: 1` and a non-empty `allowed_patterns` on the parent, add the subdirectory name to the parent's `allowed_patterns` |
 | Event rule doesn't fire                                      | `options.names` / `options.role_names` / `options.group_names` conditions exclude the subject, or the trigger type doesn't match     |
 | Template renders empty string                                | Referenced key is not populated for that trigger (see the "Placeholder picker" table in SKILL.md)                                    |
-| Share returns 404                                            | Share expired, IP restriction, path no longer exists, owning user disabled, or share path violates `filters.allowed_share_paths` / `filters.denied_share_paths` (checked at runtime, so tightening the filter blocks pre-existing shares) |
+| Share returns 404                                            | Share expired, IP restriction, path no longer exists, owning user disabled, or share violates `filters.allowed_share_paths` / `filters.denied_share_paths` / `filters.allowed_share_email_domains` (checked at runtime, so tightening the filter blocks pre-existing shares) |
 | Secret decryption error after restore                        | KMS key changed / missing; secrets are encrypted with the active KMS at write time                                                   |
 | REST API returns `400 validation_error`                      | Message in the body is the exact reason — read it first, the skill's pitfalls file has the common ones                               |
 | Cloud-backend upload fails with "unable to open pipe" / "read-only file system" / "no space left" | The host has no writable temp dir for per-transfer pipes. Fix: `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1`. See `deployment.md §5.11`. Default on marketplace offerings. |
@@ -238,6 +240,8 @@ SFTPGo writes **structured JSON**, one object per line. Every record has a `send
 | `Upload` / `Download`        | Transfer completion with bytes, elapsed ms, file path, connection id.   | Bandwidth / usage analysis, correlating with Event Manager. |
 | `Rename` / `Mkdir` / `Rmdir` / `Remove` / `Chmod` / `Chown` / `Chtimes` / `Copy` / `Truncate` / `SSHCommand` | Filesystem commands.      | "Who deleted this file?" / audit for specific operations.   |
 | `httpd`                      | REST API and WebAdmin / WebClient requests with method, URI, status.    | 4xx / 5xx investigation; slow-endpoint hunting.             |
+| `admin_login` / `share_login` | Administrator logins (WebAdmin, REST, OIDC) / password- or email-protected share authentications. | Admin access audit; share brute-force checks.               |
+| `connection_admission`       | With `common.defender.max_incomplete_connections` on: sources reported for dropped connections, banned sources refused before the handshake. | "Why is this client cut off before the handshake?"          |
 
 **Useful jq one-liners**
 

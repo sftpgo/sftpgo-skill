@@ -1,6 +1,6 @@
 # SFTPGo — Single-File AI Reference
 
-**Source of truth**: this file. Self-contained; paste it into any AI's context (ChatGPT, Gemini, Cursor, Copilot, Claude, ...) before asking for help on SFTPGo REST API payloads, WebAdmin configuration, server deployment, environment variables, or Event Action templates. Verified against SFTPGo v2.7.x.
+**Source of truth**: this file. Self-contained; paste it into any AI's context (ChatGPT, Gemini, Cursor, Copilot, Claude, ...) before asking for help on SFTPGo REST API payloads, WebAdmin configuration, server deployment, environment variables, or Event Action templates. Verified against SFTPGo v2.8.x.
 
 **Scope covered**
 
@@ -32,7 +32,7 @@ These rules apply to every `/api/v2/*` endpoint and, by equivalence, to every We
 
 ### 1.1 Authentication
 
-- **JWT token** — `POST /api/v2/token` with admin HTTP Basic auth. Short-lived; refresh flow provided.
+- **JWT token** — `GET /api/v2/token` (users: `/api/v2/user/token`) with HTTP Basic auth; with 2FA on HTTP add the code in `X-SFTPGO-OTP`. Short-lived. Disabling 2FA, generating a new secret, changing its protocols or viewing recovery codes also needs the current code (or a recovery code) in `X-SFTPGO-OTP`; API keys are refused for 2FA management.
 - **API key** — created via `/api/v2/apikeys`; sent as header `X-SFTPGO-API-KEY: <key>`. Preferred for non-interactive automation.
 - **OIDC** — only for interactive WebAdmin / WebClient login, not for REST API calls.
 
@@ -90,6 +90,7 @@ For the top-level User `password` field (a hashed scalar, not a secret envelope)
 - `POST` creates every time; there is no built-in upsert. If the unique key already exists the endpoint returns `409 Conflict`.
 - `PUT /api/v2/<resource>/<id>` is a **full-object replace**. Omitted fields are reset to default.
 - Safe update pattern: `GET` → mutate in memory → `PUT`. When mutating only a few fields, make sure you round-trip the ones you did not touch.
+- Users only: `PATCH /api/v2/users/{username}` (experimental) updates the properties sent and keeps the others; `filters` merges per property, every other property (`permissions`, `filesystem`, lists) is replaced whole.
 - Status codes: `201 Created` + `Location` header on creation, `200 OK` on update, `400` validation error (message is the actual reason — read it), `403` permission, `404` not found, `409` conflict, for example a unique key already in use.
 
 ### 1.5 User payload minimum (per backend)
@@ -127,7 +128,7 @@ Placeholders accepted inside group values: `%username%`, `%role%`, `%custom1%...
 
 **Role-scoped catalogs (Enterprise).** Groups and virtual folders carry a `role` field. With `resource_isolation` on that role, an account reaches the groups and folders of its own role only (resources carrying no role, or a role that does not isolate, form one shared set for every other account); a mismatch refuses the login (HTTP 409 on the API), a save naming a cross-role resource fails validation as for a name that does not exist, a role admin cannot save a user or group that already holds a cross-role reference (the error names a global administrator), and every user / group / folder save is measured against the role's `settings.storage_allowlist`: `allowed_providers` is default-deny, a granted backend with no entries admits what its credentials reach, and the role declares its own `local.users_base_dir`. Global admins set the role of a group or folder from the WebAdmin selector or the `role` field; a role admin never sets it, its creates take its role and its updates keep the stored one. See `editions.md`.
 
-**Virtual folder sub-path mounts.** A mapping can target a sub-path of the folder: `subpath` re-roots the mount (the same folder can be mapped multiple times with distinct subpaths), `exposed_subpaths` (Enterprise) mounts only the listed sub-paths as directories under the virtual path — one mapping row scales to thousands of entries, keeping logins fast. Canonical `/`-leading paths, mutually exclusive per mapping; quota limits are folder-wide (equal on every mapping of the same folder). Group values accept the placeholders above, with one exception to the login-refusal rule: a sub-path a user cannot render, or one whose render keeps fewer path segments than the configured text, leaves that mapping unmounted for that user while the login succeeds — the value is never rendered with an empty placeholder, so `/tenants/%role%` never falls back to `/tenants`. A sub-path nested under another entry of the same list is accepted: it mounts content the outer entry already serves. On FTP/HTTP folders the sub-path applies to `remote_directory` and follows its `allow_remote_directory` gate (see §1.5).
+**Virtual folder sub-path mounts.** A mapping can target a sub-path of the folder: `subpath` re-roots the mount (the same folder can be mapped multiple times with distinct subpaths), `exposed_subpaths` (Enterprise) mounts only the listed sub-paths as directories under the virtual path — one mapping row scales to thousands of entries, keeping logins fast. Canonical `/`-leading paths, mutually exclusive per mapping; quota limits are folder-wide (equal on every mapping of the same folder). Group values accept the placeholders above, with one exception to the login-refusal rule: a sub-path a user cannot render, or one whose render keeps fewer path segments than the configured text, leaves that mapping unmounted for that user (for `exposed_subpaths`, only that entry is left out; the mapping is unmounted when none remains) while the login succeeds — the value is never rendered with an empty placeholder, so `/tenants/%role%` never falls back to `/tenants`. A sub-path nested under another entry of the same list is accepted: it mounts content the outer entry already serves. On FTP/HTTP folders the sub-path applies to `remote_directory` and follows its `allow_remote_directory` gate (see §1.5).
 
 ### 1.7 Shares
 
@@ -160,11 +161,11 @@ Required settings: `config_url` (discovery base URL, SFTPGo appends `/.well-know
 | Kubernetes                       | Official Helm chart.                                                                                                                                                             |
 | AWS / Azure / GCP                | Marketplace listings (Starter / Premium). License bundled with subscription.                                                                                                     |
 
-Without a valid license, SFTPGo runs in **limited mode**. Limits: 2 concurrent transfers, plugins disabled, local filesystem only, no PGP / ICAP / IDP account check / Event report actions.
+Without a valid license, SFTPGo runs in **limited mode**. Limits: 2 concurrent transfers (event actions that read or write files count too), plugins disabled, local filesystem only, no PGP / Metadata check / ICAP / IDP account check / Event report actions. The license transfer cap is per node: each cluster node needs its own license.
 
 **Cloud marketplace offerings** ship preconfigured: license activated, audit-logs enabled, in-memory transfer pipes on, data provider initialized for standalone use. Audit-logs is implemented as **two** plugins (`eventstore` + `eventsearcher`) wired together — both must be loaded for the audit-logs UI to work. The Starter marketplace tier allows **2 active plugins total**, which audit-logs already fills, so on Starter there is no spare slot for a third plugin without dropping audit-logs. Premium and higher tiers have no plugin limit.
 
-**Marketplace OS images.** AWS AMIs (x86_64 and arm64) are based on **Amazon Linux 2023** (RHEL-based, `dnf`). Azure and Google Cloud Linux VMs are based on **Debian 13** (`apt`). Both SFTPGo and the OS are updated through the distribution's standard package manager — `sudo dnf update` on AWS, `sudo apt update && sudo apt upgrade` on Azure / GCP. The SFTPGo service is restarted automatically by the package's post-install scriptlet when the `sftpgo` package is upgraded — no manual `systemctl restart` is required. Check the running version with `sftpgo --version`; the same version string is also logged at service startup (`starting SFTPGo v2.7.x ...`, visible via `journalctl -u sftpgo` or in the configured log file). Marketplace offerings hide the version in the WebAdmin by default, so on those instances the CLI and the startup logs are the canonical sources. Container-based marketplace listings have their own update procedure documented on each listing page (the AWS Container listing distributes images via the AWS marketplace registry; the Azure AKS listing is a CNAB bundle upgraded through its CNAB mechanism). **Pricing.** All marketplace listings — both Enterprise and open-source-based — are billed entirely through the cloud provider; there is no separate fee from SFTPGo on top. Enterprise listings include an activated SFTPGo Enterprise license (nothing else to purchase or activate); open-source-based listings ship the SFTPGo Open Source edition (AGPLv3) and do not enable Enterprise features. Do not speculate about how the marketplace charge is split between compute and software — answer customer pricing questions in terms of what they pay for and what they get, not in terms of internal margin. Authoritative reference: [installation.md `## Commercial Marketplaces`](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/installation.md).
+**Marketplace OS images.** AWS AMIs (x86_64 and arm64) are based on **Amazon Linux 2023** (RHEL-based, `dnf`). Azure and Google Cloud Linux VMs are based on **Debian 13** (`apt`). Both SFTPGo and the OS are updated through the distribution's standard package manager — `sudo dnf update` on AWS, `sudo apt update && sudo apt upgrade` on Azure / GCP. The SFTPGo service is restarted automatically by the package's post-install scriptlet when the `sftpgo` package is upgraded — no manual `systemctl restart` is required. Check the running version with `sftpgo --version`; the same version string is also logged at service startup (`starting SFTPGo v2.8.x ...`, visible via `journalctl -u sftpgo` or in the configured log file). Marketplace offerings hide the version in the WebAdmin by default, so on those instances the CLI and the startup logs are the canonical sources. Container-based marketplace listings have their own update procedure documented on each listing page (the AWS Container listing distributes images via the AWS marketplace registry; the Azure AKS listing is a CNAB bundle upgraded through its CNAB mechanism). **Pricing.** All marketplace listings — both Enterprise and open-source-based — are billed entirely through the cloud provider; there is no separate fee from SFTPGo on top. Enterprise listings include an activated SFTPGo Enterprise license (nothing else to purchase or activate); open-source-based listings ship the SFTPGo Open Source edition (AGPLv3) and do not enable Enterprise features. Do not speculate about how the marketplace charge is split between compute and software — answer customer pricing questions in terms of what they pay for and what they get, not in terms of internal margin. Authoritative reference: [installation.md `## Commercial Marketplaces`](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/installation.md).
 
 ### 2.2 Config file location and format
 
@@ -258,6 +259,7 @@ SFTPGO_DATA_PROVIDER__SSLMODE=1
 SFTPGO_COMMON__DEFENDER__ENABLED=true
 SFTPGO_COMMON__DEFENDER__DRIVER=provider  # 'memory' (fastest, in-RAM) or 'provider' (persists across restarts; SQLite/MySQL/PostgreSQL/CockroachDB)
 SFTPGO_COMMON__DEFENDER__BAN_TIME=60
+SFTPGO_COMMON__DEFENDER__MAX_INCOMPLETE_CONNECTIONS=200  # optional (0 = off): ban TLS/SSH connection floods, refuse banned sources before the handshake
 
 # ACME (Let's Encrypt) — prefer the WebAdmin UI (Server Manager → Configurations
 # → ACME). For headless / scripted setups, use file-based config as below and
@@ -265,9 +267,9 @@ SFTPGO_COMMON__DEFENDER__BAN_TIME=60
 # renewals are then automatic.
 #   --database-protocols bitmask: 1 HTTPS, 2 FTPS, 4 WebDAV, 8 telemetry
 #   (combinable; default 15 = all)
-#   key_type: 2048 / 3072 / 4096 / 8192 (RSA) or P256 / P384 (ECDSA)
+#   key_type: P256 (default) / P384 (ECDSA) or 2048 / 3072 / 4096 / 8192 (RSA)
 SFTPGO_ACME__EMAIL=ops@example.com
-SFTPGO_ACME__KEY_TYPE=4096
+SFTPGO_ACME__KEY_TYPE=P256
 SFTPGO_ACME__DOMAINS=sftp.example.com
 SFTPGO_ACME__HTTP01_CHALLENGE__PORT=80
 
@@ -282,8 +284,12 @@ SFTPGO_TELEMETRY__ENABLE_PROFILER=true
 SFTPGO_TELEMETRY__AUTH_USER_FILE=/etc/sftpgo/telemetry.htpasswd
 
 # HAProxy PROXY protocol
-SFTPGO_COMMON__PROXY_PROTOCOL=2      # 2 = strict
-SFTPGO_COMMON__PROXY_ALLOWED=10.0.0.0/8,192.168.0.0/16
+# mode 2: proxy_allowed (load balancers) must send the header, proxy_skipped
+# (direct clients) connect without it, every other source is rejected.
+# Mode 1 is deprecated.
+SFTPGO_COMMON__PROXY_PROTOCOL=2
+SFTPGO_COMMON__PROXY_ALLOWED=10.0.0.10,10.0.0.11
+SFTPGO_COMMON__PROXY_SKIPPED=10.1.0.0/16
 
 # Memory pipes (required on read-only / ephemeral / distroless hosts)
 SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1
@@ -292,7 +298,7 @@ SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1
 SFTPGO_LICENSE_KEY=XXXX-XXXX-XXXX-XXXX
 ```
 
-**About memory pipes.** On cloud storage backends (S3 / GCS / Azure Blob), each transfer streams through a per-upload pipe. By default that pipe is file-backed and created in the user's `home_dir` (the mapped path for a virtual folder), which must be a writable local directory. On distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC there is no such directory, and uploads fail with errors like "unable to open pipe" / "read-only file system". Setting `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` makes transfers fully in-memory. Higher RAM per concurrent transfer, but no filesystem dependency. An SFTP download streams the file from its beginning and releases what the client has read past, keeping `SFTPGO_HOOK__MEMORY_PIPES__SPARSE_RETENTION` bytes behind it (4 MB default): a read that falls further behind fails naming the requested offset and the minimum allowed, and the difference between the two is how much to add to that variable. Already the default on SFTPGo cloud-marketplace offerings.
+**About memory pipes.** On cloud storage backends (S3 / GCS / Azure Blob), each transfer streams through a per-upload pipe. By default that pipe is file-backed and created in the user's `home_dir` (the mapped path for a virtual folder), which must be a writable local directory. On distroless containers, read-only rootfs, and Kubernetes pods without a writable PVC there is no such directory, and uploads fail with errors like "unable to open pipe" / "read-only file system". Setting `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` makes transfers fully in-memory. Higher RAM per concurrent transfer, but no filesystem dependency. Already the default on SFTPGo cloud-marketplace offerings.
 
 ### 2.7 Schema init & migrations
 
@@ -332,7 +338,7 @@ Official Helm chart: `oci://ghcr.io/sftpgo/helm-charts/sftpgo`. The chart is **e
 The critical choices an AI agent must get right:
 
 - **Expose SFTP via Service `LoadBalancer` / `NodePort`, not Ingress.** SFTP / FTP / WebDAV are plain TCP — an HTTP/L7 Ingress cannot forward them. The HTTP WebAdmin / WebClient can sit behind an Ingress. Cloud: AWS NLB, Azure TCP LB, GCP TCP LB. NGINX Ingress can forward TCP via the [TCP services ConfigMap](https://kubernetes.github.io/ingress-nginx/user-guide/exposing-tcp-udp-services/).
-- **Multi-replica needs an external data provider.** SQLite / bolt are single-writer; for `replicaCount > 1` use PostgreSQL / MySQL / CockroachDB (remember: CockroachDB has no `pg_advisory_lock` → serialize migrations or use `update_mode=1`).
+- **Multi-replica needs an external data provider.** SQLite / bolt are single-writer; for `replicaCount > 1` use PostgreSQL / MySQL / CockroachDB with `is_shared=1` (remember: CockroachDB has no `pg_advisory_lock` → serialize migrations or use `update_mode=1`). Web sessions across replicas: see "Multi-node" below.
 - **Persistence depends on the backend mix.** Local-home users need a PVC (RWO for single replica, RWX for multi). Cloud-backend-only deployments can run fully ephemeral with memory pipes enabled.
 - **Memory pipes are strongly recommended on Kubernetes** — set `SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1` (preconfigured on EKS / AKS marketplace offerings). With file-backed pipes the cloud-backend transfer path tries to create unlinked files in the configured temp directory; it works only if a writable, large-enough volume is mounted there, and that's an avoidable footgun on ephemeral / read-only / distroless pods. Memory pipes are an Enterprise feature; on the Open Source build file-backed pipes are the only option, so make sure the temp dir is on writable storage with enough headroom.
 - **Health probes** → the chart wires them up automatically against `/healthz` on port `10000` (telemetry, hardcoded by the chart). No manual probe config needed.
@@ -354,6 +360,8 @@ The critical choices an AI agent must get right:
        - name: SFTPGO_SFTPD__HOST_KEYS
          value: "/etc/sftpgo/ssh-keys/id_rsa,/etc/sftpgo/ssh-keys/id_ecdsa"
      ```
+
+**Multi-node (any platform).** Every node on the same MySQL / PostgreSQL / CockroachDB with `is_shared=1`: users, configs and rules are shared, quotas are enforced across nodes, scheduled rules run on one node; connection, transfer and rate limits stay per node. The **HA license feature (Ultimate tier only)**, enabled by setting `data_provider.node.host` / `port` / `proto` on each node plus the same `signing_passphrase` on every HTTP binding, adds: sessions, REST tokens, share cookies and CSRF valid on every node and across restarts; immediate propagation of rule / action / DB config / IP list / license changes; cluster-wide connection list/close and user disconnect. Without HA each node signs with a random key (`signing_passphrase` ignored), so the web UIs and REST need session affinity and sessions die on node restart; other nodes reload those changes every 10 minutes; connection management and disconnect-on-delete/update reach only the local node. SFTP, FTP and WebDAV work the same either way. TUS needs affinity in both cases.
 
 ### 2.11 Operational recipes
 
@@ -389,7 +397,7 @@ grep '"sender":"httpd"' /srv/sftpgo/logs/sftpgo.log \
 
 - **Cloud backend upload fails with "unable to open pipe" / "read-only file system" / "no space left"** → SFTPGo cannot create a file-backed pipe in the configured temp dir. Fix: enable memory pipes (`SFTPGO_HOOK__MEMORY_PIPES__ENABLED=1`). Mandatory for distroless / read-only rootfs / pods without a writable PVC; already default on marketplace offerings.
 - **Local user "permission denied" on upload while login succeeds** → the APT/YUM packages run under a dedicated `sftpgo` system account; a `home_dir` outside `/srv/sftpgo` you created as root is unreadable/unwritable by it. Fix on Linux: `chown -R sftpgo:sftpgo <home>` and `chmod +x` the parents. On Windows: grant the service account (`LOCAL SYSTEM` by default) write access on the chosen tree via `icacls`.
-- **`proxy_protocol=2` without populated `proxy_allowed`** → every connection is rejected. Configure both together.
+- **`proxy_protocol=2` without populated lists** → every source outside `proxy_allowed` (load balancers) and `proxy_skipped` (direct clients, health checks) is rejected. Configure all three together.
 - **`allowlist_status=1` before populating the list** → drops everything.
 - **Changing a tagged-union `driver`/`provider` without its sub-config** → service starts but cannot reach the target (DB, backend, IdP).
 - **`env.d` does not override process env**. If a value is exported at the systemd / container level, changes under `env.d/` are ignored until the outer source is cleared.
@@ -434,7 +442,7 @@ Almost everything in this reference targets the **Enterprise** edition. The **Op
 - Action types: **ICAP**, **IMAP**, **event reports** (type 19), **PGP**, **execute-before-file-publish** staged uploads, enhanced copy with source disposition / glob / retries, data retention with archival.
 - OIDC beyond the basics: configurable `role_values` / `user_role_values` (OSS matches the hardcoded claim value `admin`), session control (`max_age`, `prompt`), RP-initiated logout, custom login label (`ui_name`), Azure B2C issuer overrides, `disabled_security_features` (turns PKCE off — never suggest it, PKCE is on by default in both editions), and the WebAdmin OIDC form. PKCE itself and secretless public clients work on OSS too.
 - WebClient WOPI / Collabora, TUS resumable uploads. (TUS works on Enterprise even in limited mode — no license needed; opt in per HTTPD binding via `upload_chunk_size > 0`.)
-- Share email authentication, group governance, path / scope restrictions.
+- Share email authentication, group governance, path / scope / recipient-domain restrictions.
 - Cloud backend performance optimizations (memory pipes / small-file speedups), GCS HNS, SFTP backend SOCKS proxy, FTP backend.
 - Clustering, the WebAdmin UI for LDAP / Geo-IP / email templates / SSH host keys, API key management UI, and the Enterprise builds of the `eventstore` / `eventsearcher` plugins that power the audit-logs browsing UI (open-source builds of those plugins are also available on OSS, and the browsing UI itself works in both editions — what differs is the depth of the captured data).
 
@@ -550,6 +558,7 @@ In addition to standard `text/template` built-ins (`printf`, `len`, `index`, `sl
 
 - `stringSlice(args ...string) []string`.
 - `stringJoin(strs []string, sep string) string` — **slice first, separator second** (same as Go's `strings.Join`).
+- `stringSplit(s, sep) []string` — `strings.Split`; pair with `index`/`slice`. A leading `/` gives an empty element 0.
 - `stringTrimSuffix(s, suffix) string`, `stringTrimPrefix(s, prefix) string`.
 - `stringReplace(s, old, new) string` — **same arg order as Go's `strings.ReplaceAll`** (source, old, new).
 - `stringHasPrefix`, `stringHasSuffix`, `stringContains` — `(s, sub) bool`.
@@ -586,7 +595,7 @@ The action's integer `type` field selects which sub-configuration is read from `
 | 13     | IDP account check         | `idp_config`              | `template_user`, `template_admin`                                                                                                |
 | 14     | User inactivity check     | `user_inactivity_config`  | (none)                                                                                                                           |
 | 15     | Rotate logs               | (none)                    | —                                                                                                                                |
-| 16     | IMAP                      | `imap_config`             | `email[]`, `subject`, `body`, `attachments[]`, `target_folder`, `flags[]`                                                        |
+| 16     | IMAP                      | `imap_config`             | `path` (destination of each attachment)                                                                                          |
 | 17     | ICAP                      | `icap_config`             | `paths[]`                                                                                                                        |
 | 18     | Share expiration check    | `share_expiration_config` | (none)                                                                                                                           |
 | 19     | Event report              | `event_report_config`     | (none — results surface via `.EventReports`)                                                                                     |
@@ -625,7 +634,7 @@ Other Premium-tier-only action types: `13` (IDP), `17` (ICAP), `19` (Event Repor
 
 | `trigger` | Name                | Populates                                                                                                                                                                                                                                  | Typical use                                    |
 | --------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| 1         | Filesystem event    | `.Name`, `.Event`, `.Status`, `.VirtualPath`, `.FsPath`, `.VirtualTargetPath`, `.FsTargetPath`, `.ObjectName`, `.ObjectType`, `.FileSize`, `.Elapsed`, `.Protocol`, `.IP`, `.Role`, `.Email`, `.Timestamp`, `.UID`, `.Metadata`, `.Errors` | Upload webhook, ICAP scan, compress on upload. |
+| 1         | Filesystem event    | `.Name`, `.Event`, `.Status`, `.VirtualPath`, `.FsPath`, `.VirtualTargetPath`, `.FsTargetPath`, `.ObjectName`, `.FileSize`, `.Elapsed`, `.Protocol`, `.IP`, `.Role`, `.Email`, `.Timestamp`, `.UID`, `.Metadata`, `.Errors` | Upload webhook, ICAP scan, compress on upload. |
 | 2         | Provider event      | `.Name`, `.Event` (`add` / `update` / `delete`), `.ObjectName`, `.ObjectType`, `.Object`, `.Role`, `.Timestamp`, `.UID`, `.Initiator` (lazy `User` / `Admin` of who triggered the change)                                                  | Audit, CRM sync on user add.                   |
 | 3         | Schedule (cron)     | `.Timestamp`, `.UID`. Chain-populated fields (e.g. `.RetentionChecks`, `.EventReports`, `.ShareExpirationChecks`) come from earlier actions.                                                                                               | Nightly retention report.                      |
 | 4         | IP blocked          | `.IP`, `.Protocol`, `.Event`, `.Timestamp`, `.UID`, `.Errors`                                                                                                                                                                              | SOC alert.                                     |
@@ -633,7 +642,7 @@ Other Premium-tier-only action types: `13` (IDP), `17` (ICAP), `19` (Event Repor
 | 6         | On demand           | `.Name` = rule name, `.Timestamp`, `.UID`. Otherwise empty until earlier chained actions populate fields.                                                                                                                                  | Manual triggers.                               |
 | 7         | IDP login           | `.Name`, `.Protocol = "OIDC"`, `.IP`, `.Timestamp`, `.UID`, `.IDPFields`                                                                                                                                                                   | JIT user / admin provisioning.                 |
 
-`fs_events` sub-filter (trigger 1): `upload`, `pre-upload`, `first-upload`, `download`, `pre-download`, `first-download`, `delete`, `pre-delete`, `rename`, `mkdir`, `rmdir`, `copy`, `ssh_cmd`.
+`fs_events` sub-filter (trigger 1): `upload`, `pre-upload`, `first-upload`, `download`, `pre-download`, `first-download`, `delete`, `pre-delete`, `rename`, `mkdir`, `rmdir`, `copy`, `ssh_cmd`. `pre-delete` also fires when a rename or copy overwrites a file and when an SFTP truncate shrinks one.
 
 `provider_events` sub-filter (trigger 2): `add`, `update`, `delete`.
 
@@ -657,6 +666,11 @@ A template that references a field the trigger does not populate **renders an em
 10. **`.FileSize` / `.Elapsed` are 0 on `pre-*` events.** Condition on `.Event` if a size threshold matters.
 11. **Schedule triggers don't have `.VirtualPath`.** Cron-triggered rules see only `.Timestamp` + chained data. Restructure, don't fight it.
 12. **"Compiles but webhook body is empty"** is almost always a trigger/field mismatch — cross-check every dotted field against the trigger's "Populates" list in §3.5.
+13. **`/**/batch_ok` also matches `/batch_ok`** in a path condition (`**` matches zero directories); use `/*/batch_ok` or `/*/**/batch_ok` to exclude the root.
+14. **A templated Copy source can render to `/`** (`{{pathDir .VirtualPath}}` for a root upload): save-time validation cannot see it, and with a target folder set the run fails with `nested copy ... is not supported`. Exclude root uploads with a path condition such as `/*/**/*`.
+15. **A glob Copy source matches in-progress atomic uploads** (`.sftpgo-upload.<id>.<name>` on local storage, matched by `*` and `*.csv`): write `[^.]*.csv`. Matched subdirectories are copied recursively.
+16. **File-processing actions take a transfer slot.** Copy, Compress, Extract, PGP, ICAP, IMAP and email/HTTP attachments hold a slot of the global concurrent-transfer limit (per node) while they run, and fail at once when none is free (log: `task admission denied, total limit reached`). Copy has retries.
+17. **Overlapping scheduled runs are skipped.** A tick that fires while the rule's previous run is still in progress does nothing.
 
 ---
 
@@ -680,4 +694,4 @@ When asked to produce SFTPGo artefacts:
 
 ---
 
-**Reference version:** v0.5.0 · verified against SFTPGo v2.7.x · upstream <https://sftpgo.com>
+**Reference version:** v0.6.0 · verified against SFTPGo v2.8.x · upstream <https://sftpgo.com>

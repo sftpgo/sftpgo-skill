@@ -60,7 +60,7 @@ The **canonical and most up-to-date list** is the "What Enterprise adds" table o
 
 **Sharing**
 
-- **Enterprise adds**: email-based authentication on shares, group-based delegation and governance policies, path and scope restrictions.
+- **Enterprise adds**: email-based authentication on shares, group-based delegation and governance policies, path, scope and recipient-domain restrictions.
 
 **Storage**
 
@@ -68,7 +68,7 @@ The **canonical and most up-to-date list** is the "What Enterprise adds" table o
 
 **Administration**
 
-- **Enterprise adds**: clustering with near real-time propagation; extended WebAdmin UI for OIDC, LDAP, Geo-IP, TLS certificates, email templates, SSH host keys; API key management from the UI; granular admin permissions for groups and folders (`view_groups`, `manage_groups`, `del_groups`, `view_folders`, `manage_folders`, `del_folders`) that split the OSS umbrella `manage_groups` / `manage_folders` into independent view, edit, and delete grants. The env var `SFTPGO_HOOK__LEGACY_ADMIN_PERMS=1` restores the umbrella semantics for in-place upgrades.
+- **Enterprise adds**: clustering with near real-time propagation — the **HA** license feature, **Ultimate tier only**; a shared SQL provider without it still shares users, configs and quotas, but web sessions need sticky load balancing and changes reach other nodes within 10 minutes (`deployment.md` §5.13); extended WebAdmin UI for OIDC, LDAP, Geo-IP, TLS certificates, email templates, SSH host keys; API key management from the UI; granular admin permissions for groups and folders (`view_groups`, `manage_groups`, `del_groups`, `view_folders`, `manage_folders`, `del_folders`) that split the OSS umbrella `manage_groups` / `manage_folders` into independent view, edit, and delete grants. The env var `SFTPGO_HOOK__LEGACY_ADMIN_PERMS=1` restores the umbrella semantics for in-place upgrades.
 
 **Roles and multi-tenancy**
 

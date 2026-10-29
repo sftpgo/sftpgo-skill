@@ -196,7 +196,7 @@ This is documented upstream behavior, not a bug. If you template the path:
 {{printf "%s/" (pathJoin (stringSlice "/some/templated/path"))}}
 ```
 
-## 10b. PGP target derived via `pathDir` needs an explicit trailing slash
+## 11. PGP target derived via `pathDir` needs an explicit trailing slash
 
 The PGP action treats a target ending with `/` as a destination directory and derives the per-file output filename (encrypt: append `.pgp`; decrypt: strip the last extension or append `.dec`). Without the trailing slash the target is a literal output path.
 
@@ -208,7 +208,7 @@ target: /{{ pathDir .VirtualPath }}/   # trailing slash REQUIRED
 
 Drop the slash and the rule works only by luck for files at root: `/{{ pathDir "/file.txt" }}` renders to `//`, which `path.Clean`s to `/`. Root is intrinsically a directory, so the derive branch fires anyway and the file lands at `/file.txt.pgp`. For a non-root upload like `/sub/file.txt` the same template renders to `/sub` (no trailing slash → literal output), and PGP would write the encrypted bytes overwriting (or colliding with) the directory `/sub`. Always include the trailing slash for portability across upload paths.
 
-## 10c. Source-only PGP / Compress: rejected at validate
+## 12. Source-only PGP / Compress: rejected at validate
 
 PGP (encrypt and decrypt) and Compress reject configurations with `Folder` set and `TargetFolder` empty. These actions produce derived output that has no sensible per-user destination when the source is shared: per-user iteration would replicate identical output across every matching user's home, or race with disposition on the shared source.
 
@@ -216,23 +216,23 @@ Canonical pattern for in-place batch processing inside a shared folder: **set bo
 
 Copy and Extract are intentionally **not** subject to this rule: their source-only configuration is the documented "distribute a shared resource into every user's home" pattern.
 
-## 10d. Copy with a glob source: the target is a destination directory
+## 13. Copy with a glob source: the target is a destination directory
 
-`executeCopyGlob` builds each destination as `path.Join(target, fi.Name())`, so with a wildcard source the target is a **directory** and every matched entry keeps its own name — with or without a trailing slash. Note the asymmetry with 10b: PGP *requires* the slash and derives per-file names, Copy ignores the marker entirely once the source is a glob. There is no per-file renaming with a wildcard; for a chosen output name give the entry a literal source path.
+`executeCopyGlob` builds each destination as `path.Join(target, fi.Name())`, so with a wildcard source the target is a **directory** and every matched entry keeps its own name — with or without a trailing slash. Note the asymmetry with 11: PGP *requires* the slash and derives per-file names, Copy ignores the marker entirely once the source is a glob. There is no per-file renaming with a wildcard; for a chosen output name give the entry a literal source path.
 
-Target placeholders are rendered **before** the pattern expands, so they read the same for every matched entry. `/dest/{{ .Timestamp.Format "20060102T150405" }}` is therefore one directory per run holding the whole batch, and the same holds for `on_source_copied_move_path` — that is the supported way to keep repeated deliveries from overwriting each other. Combined with #11 this produces a config that looks broken but is not: on a scheduled rule `/dest/{{ .ObjectName }}_{{ .Timestamp.Format "20060102T150405" }}` renders `/dest/_<ts>`, a directory with an odd leading underscore, because `.ObjectName` is empty without filesystem context.
+Target placeholders are rendered **before** the pattern expands, so they read the same for every matched entry. `/dest/{{ .Timestamp.Format "20060102T150405" }}` is therefore one directory per run holding the whole batch, and the same holds for `on_source_copied_move_path` — that is the supported way to keep repeated deliveries from overwriting each other. Combined with #14 this produces a config that looks broken but is not: on a scheduled rule `/dest/{{ .ObjectName }}_{{ .Timestamp.Format "20060102T150405" }}` renders `/dest/_<ts>`, a directory with an odd leading underscore, because `.ObjectName` is empty without filesystem context.
 
 Two consequences of the wildcard matching directories too: a matched directory is copied with its whole contents, and the disposition moves files only, so an emptied source directory stays behind and is re-matched on every run. Keep an archive directory **outside** the globbed directory, and note that a nested layout cannot be flattened on the way out — `expandGlob` patterns the last path component only, so `/inbound/*/*` is not a valid source.
 
-## 11. Schedule trigger sees no `.VirtualPath` / `.Event`
+## 14. Schedule trigger sees no `.VirtualPath` / `.Event`
 
 If the rule trigger is `schedule` (3) and the template references `.VirtualPath`, the output is empty. Schedules have no filesystem context. Use chained actions (retention action → email template with `.RetentionChecks`) or restructure as a provider/fs-event rule.
 
-## 12. "Template validated OK but webhook receives empty fields"
+## 15. "Template validated OK but webhook receives empty fields"
 
-Root cause is almost always **trigger / field mismatch** — see pitfall 11 above and `trigger-types.md`. The template **compiles** because the keys always exist in the map; the values are just zero-valued for this trigger.
+Root cause is almost always **trigger / field mismatch** — see pitfall 14 above and `trigger-types.md`. The template **compiles** because the keys always exist in the map; the values are just zero-valued for this trigger.
 
-## 13. System-executed actions don't fire other rules
+## 16. System-executed actions don't fire other rules
 
 If a rule action runs **as the system** rather than on behalf of a real user, the events that action emits do not chain into other rules. Both axes are filtered:
 
@@ -247,7 +247,7 @@ The intent is to keep the rule graph predictable and prevent cascading triggers.
 
 Mitigation: lint templates against the trigger. A human-scale check is to look at `trigger-types.md` "Populates" column for the chosen trigger and confirm every dotted field you reference is in that list.
 
-## 14. Name / role / group filters on a system-context action skip the action
+## 17. Name / role / group filters on a system-context action skip the action
 
 Symptom: an fs action that worked yesterday now logs `no <op> executed` after the rule was edited to add a name, role, or group filter. Or a freshly-built scheduled rule that copies/PGP-encrypts/deletes inside a virtual folder never runs anything despite the schedule firing.
 
@@ -259,7 +259,7 @@ Cause. The synthetic system identity used by system-context actions has no real 
 
 Fix. Remove the user/role/group filter from the rule. System actions describe shared resources, not users. Use trigger and event-status filters to scope a system rule; reserve user filters for per-user rules.
 
-## 15b. Microsoft IMAP OAuth2 — `AUTHENTICATE failed` after a successful token refresh
+## 18. Microsoft IMAP OAuth2 — `AUTHENTICATE failed` after a successful token refresh
 
 Symptom: an IMAP action against `outlook.office365.com:993` logs `new oauth2 token saved ...` immediately followed by `unable to login using OAuth2 to the IMAP server ...: AUTHENTICATE failed.` The token endpoint succeeded, so it's not a scope or client-secret problem.
 
@@ -270,7 +270,7 @@ Fix.
 2. Revoke the existing app consent from [My Apps](https://myapps.microsoft.com/) so the previous refresh token is invalidated.
 3. Re-run **Get** in the IMAP action form, signing in as `delegate@domain.com`. The new refresh token is bound to that identity and IMAP AUTHENTICATE succeeds.
 
-## 16. Directory rename denied when the two paths carry different restrictions
+## 19. Directory rename denied when the two paths carry different restrictions
 
 *Refusal applies from v2.7.20260910; the permission facts below hold on every release.*
 
@@ -280,7 +280,7 @@ Cause. A rename carries the entries the directory holds, so they are authorized 
 
 Fix. Move the contents, or define the same permissions and file pattern filters on both paths. Often assumed wrongly: a rename consults only the rename permissions of the two parent directories, plus `overwrite` to replace an existing file — `upload`, `create_dirs` and the delete permissions are not part of it.
 
-## 15. Backup chain cannot delete or rename the backup file
+## 20. Backup chain cannot delete or rename the backup file
 
 Symptom: an action chained after the Backup action that tries to delete or move the just-produced dump file is denied with a permission error.
 
@@ -289,7 +289,7 @@ Cause. The synthetic user used by the backup chain is granted list and download 
 Fix. Don't chain destructive operations after Backup. To clean up old dumps, configure data retention separately on the backups directory (folder-scoped retention with the backups folder as source).
 
 
-## 17. Role resource isolation: role-less resources disappear, cross-role references deny the login
+## 21. Role resource isolation: role-less resources disappear, cross-role references deny the login
 
 Symptom: after `resource_isolation` is enabled on a role, its administrators no longer see groups and folders they were using, and some accounts can no longer log in on any protocol.
 
@@ -297,7 +297,7 @@ Cause. Isolation scopes a role admin to the groups and folders that carry its ro
 
 Fix. Assign the role to the groups and folders the team owns first, then read the role storage compliance report (`GET /api/v2/roles/{name}/storage-compliance`, `*` permission) and enable the flag. `violation` rows are stored configurations the allowlist rejects (the account keeps working until its next save), `reference` rows are the accounts the flag locks out; posture rows appear once the role isolates.
 
-## 18. OIDC login refused: the username claim carries no value
+## 22. OIDC login refused: the username claim carries no value
 
 Symptom: the IdP authentication succeeds, then the SFTPGo login page reports `Invalid OpenID token` and nothing more.
 
@@ -308,3 +308,45 @@ username field "preferred_username" not found, empty or not a string, claims fie
 ```
 
 Fix. `username_field` takes the claim name alone (`email`, `preferred_username`, `sub`), so a value carrying stray quotes or spaces never matches — a WebAdmin form field is neither shell nor JSON syntax, and quotes are stripped only by `env.d` files and systemd `EnvironmentFile`: a Docker `--env-file` or a compose `environment:` list entry keeps them literally. When the claim name is right, the claim itself may be missing from the ID token: one the IdP returns from the UserInfo endpoint alone needs `query_userinfo` enabled, one gated behind a scope needs that scope in `scopes`. Set `debug` to log the full token while diagnosing.
+
+## 23. A restriction is reached through another spelling of its path
+
+*Applies from v2.8.20261028.*
+
+Symptom: a per-directory permission, a file pattern filter or a denied share path on `/private` does not apply to `/PRIVATE`.
+
+Cause. On local storage on Windows the settings of a path apply to every spelling the storage resolves to it (letters outside ASCII only when both names contain them), and short names with `~` and names ending with a dot or a space are refused. Every other storage (Linux local, network shares mounted on Linux, SFTP/FTP/HTTP, S3/GCS/Azure) matches the path as written: the storage decides which spellings reach the same file. Wildcard permission paths and Event Manager path conditions are text comparisons, with ASCII case folded only on Windows local storage.
+
+Fix. Assign differing settings at folder level, one virtual folder per area: a mount path is matched exactly. On Linux, use shares that keep names distinct (NFS of a case-sensitive file system; Samba `case sensitive = yes` and `mangled names = no`). Docs: [access-control.md](https://raw.githubusercontent.com/sftpgo/docs/enterprise/docs/access-control.md#names-that-reach-the-same-entry).
+
+## 24. Two accounts share one generated home directory
+
+Symptom: `Bob` and `bob`, or names that differ only outside ASCII, see each other's files; or creating `anna~1` fails with "home_dir is mandatory".
+
+Cause. A home generated from `users_base_dir`, a role base directory or a group `%username%` template is named after the username: usernames distinct in the data provider (SQLite, PostgreSQL, CockroachDB keep letter case) can be one directory on storage that ignores case. A username with `~` gets no generated home, since `~` marks Windows short names.
+
+Fix. With externally provisioned usernames (external auth, pre-login hook, OIDC, LDAP) set `naming_rules` to `6` or set `home_dir` explicitly; give each isolated role its own base directory. A group placeholder value with `[`/`]` in a permission path or `~` in a home or mapped path refuses the login by design.
+
+## 25. Copy, move or action refused: the target is another name of the source
+
+*Applies from v2.8.20261028.*
+
+Symptom: a copy fails with "source and target cannot be the same", a WebDAV `COPY`/`MOVE` returns 403, or a PGP/Compress/Extract action fails, although the paths differ.
+
+Cause. The target is the source under another name: a letter case variant, a hard link or a symbolic link, recognized on local storage from the identity the storage reports (every platform). A WebDAV `MOVE` that changes only the letter case is refused on Windows local storage.
+
+Fix. Use a distinct target; for a case-only rename use SFTP, FTP, the WebClient or the REST API: there it works without `overwrite` and leaves the quota unchanged.
+
+## 26. Event Manager paths that reach further than intended
+
+- **Path condition `/**/batch_ok` also matches `/batch_ok`**: `**` matches zero directories too. To exclude the root write `/*/batch_ok` (exactly one level) or `/*/**/batch_ok` (one or more).
+- **A templated Copy source can render to `/`**, e.g. `{{pathDir .VirtualPath}}` for an upload at the root. Save-time validation sees only the template; with a target folder set the run fails with a `nested copy ... is not supported` error. Exclude root uploads with a path condition such as `/*/**/*`.
+- **A glob Copy source also matches in-progress atomic uploads**: on local storage the temporary file `.sftpgo-upload.<id>.<name>` sits in the destination directory, and `*` or `*.csv` match it. Start the pattern with a negated class, e.g. `[^.]*.csv`. Matched subdirectories are copied recursively, see 13.
+
+## 27. File-processing actions fail when the transfer limit is reached
+
+Symptom: a Copy, Compress, Extract, PGP, ICAP or IMAP action, or an email/HTTP action with file attachments, fails under load with a cancelled read or write, and the log shows `task admission denied, total limit reached: N/M`.
+
+Cause. While it reads or writes files the action holds a slot of the global concurrent-transfer limit (`max_total_transfers`, or the license cap: 2 in limited mode), shared with client transfers and counted per node. When no slot is free the action fails at once, there is no queue.
+
+Fix. Size the limit for client transfers plus concurrent actions; Copy has a retries setting for transient failures; pair critical actions with a failure action for alerting.
