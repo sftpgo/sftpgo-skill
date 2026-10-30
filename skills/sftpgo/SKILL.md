@@ -87,15 +87,41 @@ Both editions share these rules:
 - Dot prefix is **mandatory** for field access: `{{.Name}}`, not `{{Name}}`.
 - A field that the trigger does not populate renders as the empty string (Enterprise) or stays as the literal placeholder text (OSS) — neither is an error.
 
+## Step 0 — establish the environment before answering a new problem
+
+The same question has a different correct answer on the SaaS, on a self-hosted Enterprise install and on the Open Source edition: a CLI command or env var is useless on the SaaS, and most Event Manager, OIDC and UI-configuration content is Enterprise-only. A confident answer for the wrong environment is the most expensive mistake this skill can make, so **ask before answering**, do not guess.
+
+**When to ask.** At the start of every new problem — configuring, deploying, troubleshooting, or producing a REST API payload or an Event Action template — unless the environment is already established:
+
+- the user stated it earlier in the conversation, or
+- a strong signal confirms it (see `references/saas.md` §1 and `references/editions.md` §4 — e.g. `bucket=default` + `region=default`, a `drakkan/sftpgo` image, a `registry.sftpgo.com` image).
+
+Indirect or weak signals are not enough: ask, and mention what you noticed. A purely conceptual question ("what is a virtual folder?") can be answered directly, flagging any part that depends on the edition.
+
+**How to ask.** Ask first, in one short message, and wait for the reply — do not attach a long answer that covers every environment. Offer numbered options so the user can reply with a number:
+
+> Before I answer, which SFTPGo setup are you using?
+>
+> 1. **Fully-managed SaaS** from sftpgo.com (hosted for you, you only use the WebAdmin, WebClient, SFTP and REST API)
+> 2. **Self-hosted Enterprise** — official packages, the `registry.sftpgo.com` image, the Helm chart, or a cloud-marketplace VM / container (AWS, Azure, GCP)
+> 3. **Open Source edition** — from `github.com/drakkan/sftpgo`, the Docker Hub `drakkan/sftpgo` image, a Linux distribution, a NAS / home-lab app store or another third-party package
+> 4. **Not sure**
+
+Adapt the wording to the user's language. When the problem is a troubleshooting one, add in the same message — at most two more questions — the SFTPGo version and the exact error message or log line. Do not ask about anything the user already told you.
+
+If the user answers **Not sure**, help them find out with the detection signals in `references/editions.md` §4 (where they installed it from, the Docker image name, whether the WebAdmin shows a license section or *"License inactive, limited functionality"*) instead of picking an edition for them.
+
+**After the answer.** Treat it as settled for the rest of the conversation — do not ask again. Route with it: SaaS → `references/saas.md`; Open Source → `references/editions.md` §5; self-hosted Enterprise → the full skill, plus `references/deployment.md` for server-side changes. If a later message contradicts the answer (e.g. an OSS user pastes a `registry.sftpgo.com` image, or a template function the OSS engine does not have), point out the mismatch and confirm before continuing.
+
 ## Workflow
 
 **When the user's question is about SFTPGo in general** (creating users, groups, shares, setting up event rules, troubleshooting, picking a backend, etc.), start from `references/user-guide.md` — short orientation with pointers into the public docs. Fetch the public doc file (raw GitHub URL) when you need operational depth; its frontmatter description tells you if it's the right one before you commit tokens to the full read.
 
 **When the user's question is about installation, server configuration, or environment variables** (package install, Docker/K8s, editing `sftpgo.json`, composing `SFTPGO_...` env vars, enabling HTTPS / ACME / Defender, data-provider setup, licensing), start from `references/deployment.md`. It contains the env-var naming rule (the part an AI must get exactly right), ready-to-paste `env.d/` recipes, and the sysadmin pitfall list.
 
-**When the user is on the fully-managed SaaS** (dedicated per-instance subdomain we assigned, custom domain via CNAME onto it, `bucket=default`+`region=default` in their config, mentions "managed service" / "SaaS" / "sftpgo.com plan"), start from `references/saas.md` — the customer has no shell access, so deployment recipes, env vars, and CLI commands are off-limits, and there is a pre-created `default` group wired to the integrated storage that is the right answer for most user-creation questions. If detection is ambiguous, ask the user directly: *"Are you using the fully-managed SaaS from sftpgo.com, or are you running SFTPGo on your own server?"*
+**When the user is on the fully-managed SaaS** (dedicated per-instance subdomain we assigned, custom domain via CNAME onto it, `bucket=default`+`region=default` in their config, mentions "managed service" / "SaaS" / "sftpgo.com plan"), start from `references/saas.md` — the customer has no shell access, so deployment recipes, env vars, and CLI commands are off-limits, and there is a pre-created `default` group wired to the integrated storage that is the right answer for most user-creation questions. If detection is ambiguous, ask the Step 0 question.
 
-**Before committing to an answer on any unfamiliar installation** (especially when the user mentions a managed-hosting provider, a NAS or home-lab app store, a community Linux-package archive, a Docker Hub `drakkan/sftpgo` image, a "free version", or "no license"), consult `references/editions.md`. The skill's content overwhelmingly targets Enterprise; the Open Source edition has a reduced Event Manager, basic OIDC, no WOPI / LDAP / ICAP / PGP / staged-upload / event-report / clustering / audit-logs UI, and no support from third-party resellers. `editions.md` has detection signals, the canonical difference list, and the rule to flag Enterprise-only features plainly (once, no sales pitch) when answering an OSS user. When the edition is uncertain, ask.
+**Before committing to an answer on any unfamiliar installation** (especially when the user mentions a managed-hosting provider, a NAS or home-lab app store, a community Linux-package archive, a Docker Hub `drakkan/sftpgo` image, a "free version", or "no license"), consult `references/editions.md`. The skill's content overwhelmingly targets Enterprise; the Open Source edition has a reduced Event Manager, basic OIDC, no WOPI / LDAP / ICAP / PGP / staged-upload / event-report / clustering / audit-logs UI, and no support from third-party resellers. `editions.md` has detection signals, the canonical difference list, and the rule to flag Enterprise-only features plainly (once, no sales pitch) when answering an OSS user. When the edition is uncertain, ask the Step 0 question.
 
 **When the user is specifically authoring an Event Action template:**
 

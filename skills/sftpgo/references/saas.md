@@ -23,7 +23,7 @@ Weak signals — possible but verify:
 - Questions framed around WebAdmin flows only, no talk of config files or env vars.
 - Mentions of "recycle bin" already working out of the box.
 
-**When in doubt, ask.** A single question — *"Are you using the fully-managed SaaS from sftpgo.com, or are you running SFTPGo on your own server?"* — avoids a long-winded wrong answer. Most of the skill content applies either way; the SaaS-specific adjustments are limited.
+**When in doubt, ask.** The single numbered question in `SKILL.md` ("Step 0 — establish the environment") separates the SaaS from self-hosted Enterprise and Open Source in one reply and avoids a long-winded wrong answer. Most of the skill content applies either way; the SaaS-specific adjustments are limited.
 
 ## 2. What is preconfigured on every SaaS plan
 

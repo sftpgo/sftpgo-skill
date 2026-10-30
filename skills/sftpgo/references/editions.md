@@ -96,7 +96,7 @@ Indirect signals — likely but verify:
 - User gets a "this feature requires a valid license" error or "plugins are disabled" → Enterprise binary without a valid license (limited mode).
 - User asks about a template function like `toJson` and their Event Manager save rejects it → OSS basic Event Manager.
 
-**When uncertain, ask.** A single question avoids back-and-forth: *"Are you on the Enterprise edition or the Open Source edition?"* (or "Did you install from `sftpgo.com` / the APT-YUM repo, or from `github.com/drakkan/sftpgo` / Docker Hub / a third-party package?").
+**When uncertain, ask.** Use the single numbered question in `SKILL.md` ("Step 0 — establish the environment"), which covers SaaS, self-hosted Enterprise and Open Source at once. If the user is not sure, walk them through the direct signals above (installation source, Docker image name, license banner) rather than guessing.
 
 ## 5. How to answer once the edition is known
 
