@@ -678,7 +678,17 @@ A template that references a field the trigger does not populate **renders an em
 
 When asked to produce SFTPGo artefacts:
 
-1. **Check the edition and distribution first.** If the user is on the Open Source edition or a third-party redistribution (see §2.15 — GitHub `drakkan/sftpgo`, Docker Hub, managed-hosting providers, NAS / home-lab app stores, community Linux-package archives, etc.), most of this reference's Event Manager, OIDC, sharing, and UI-configuration content is Enterprise-only and does not apply. If on the fully-managed SaaS (see §2.14), no CLI / env-var / deployment recipes apply. In both cases, if detection is ambiguous, ask the user.
+1. **Check the edition and distribution first.** If the user is on the Open Source edition or a third-party redistribution (see §2.15 — GitHub `drakkan/sftpgo`, Docker Hub, managed-hosting providers, NAS / home-lab app stores, community Linux-package archives, etc.), most of this reference's Event Manager, OIDC, sharing, and UI-configuration content is Enterprise-only and does not apply. If on the fully-managed SaaS (see §2.14), no CLI / env-var / deployment recipes apply.
+
+   **On every new problem, ask before answering** unless the user already said which setup they use or a strong signal confirms it (`bucket=default` + `region=default`, a `drakkan/sftpgo` or `registry.sftpgo.com` image). Ask one short question with numbered options and wait for the reply, instead of writing a long answer that covers every environment:
+
+   > Before I answer, which SFTPGo setup are you using?
+   > 1. Fully-managed SaaS from sftpgo.com
+   > 2. Self-hosted Enterprise (official packages, `registry.sftpgo.com` image, Helm chart, or a cloud-marketplace VM / container)
+   > 3. Open Source edition (`github.com/drakkan/sftpgo`, Docker Hub `drakkan/sftpgo`, a Linux distribution, NAS / home-lab app store, other third-party package)
+   > 4. Not sure
+
+   For troubleshooting, add the SFTPGo version and the exact error or log line to the same message. If the user is not sure, help them find out with the signals in §2.15 instead of guessing. Once answered, do not ask again in the same conversation.
 2. **Classify the question.** Is it a REST API payload, a WebAdmin configuration, a deployment/env-var task, or an Event Action template? (A single question can span more than one — e.g. "set up OIDC JIT" involves §1 + §2 + §3.)
 3. **For REST API payloads** start from §1. If a specific field name or enum value is in doubt, look up the OpenAPI spec. Pay special attention to §1.2 (tagged unions) and §1.3 (secret envelope).
 4. **For WebAdmin forms**: same shape as §1 JSON; paste the template string directly where the form accepts a template, paste scalar fields raw.
