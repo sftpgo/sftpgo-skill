@@ -12,6 +12,7 @@ metadata:
     site: "https://sftpgo.com"
     rest_api_docs: "https://sftpgo.com/rest-api"
     verified_against: "v2.8.x"
+    docs_synced_at: "2026-10-29"
   current_scope:
     - Event Action templates — Go text/template authoring for email / HTTP / command / IDP / IMAP / ICAP / filesystem actions, as accepted both by the REST API (`/api/v2/events/actions`, `/api/v2/events/rules`) and by the WebAdmin UI form fields.
     - Deployment & configuration — installation methods, `sftpgo.<ext>` config file, `SFTPGO_...` environment variable convention, `env.d/` recipes, sysadmin pitfalls.
@@ -68,6 +69,8 @@ Two dual-use index pages to orient fast without reading the full navigation:
 - `glossary.md` — disambiguation of SFTPGo-specific terms
 
 Every indexed file has a `description:` frontmatter line: read that first to decide whether the file is worth fetching.
+
+**The public docs are updated before this skill.** `metadata.upstream.docs_synced_at` is the date this skill was last aligned with them. Before answering a question about how to configure something or how a feature works, fetch the matching docs page (find it with `documentation-map.md`) instead of relying on this skill's summary alone. When the docs and this skill disagree, follow the docs. This skill's own content stays the reference for what the docs do not cover: per-trigger placeholders, template functions and pitfalls, edition and SaaS gating, answer conventions.
 
 **This skill's reference files** — for what the OpenAPI spec and the public docs cannot easily express: enum↔sub-config mappings, per-trigger placeholder availability, template context shape, quoting rules, ready-to-paste templates, common pitfalls.
 
@@ -174,7 +177,7 @@ Example. It shows the style only: do not reuse its content in answers about othe
 
 ## Workflow
 
-**When the user's question is about SFTPGo in general** (creating users, groups, shares, setting up event rules, troubleshooting, picking a backend, etc.), start from `references/user-guide.md` — short orientation with pointers into the public docs. Fetch the public doc file (raw GitHub URL) when you need operational depth; its frontmatter description tells you if it's the right one before you commit tokens to the full read.
+**When the user's question is about SFTPGo in general** (creating users, groups, shares, setting up event rules, troubleshooting, picking a backend, etc.), start from `references/user-guide.md` — short orientation with pointers into the public docs. Fetch the matching public doc file (raw GitHub URL) before answering a configuration or how-it-works question — the docs may be newer than this skill; its frontmatter description tells you if it's the right one before you commit tokens to the full read.
 
 **When the user's question is about installation, server configuration, or environment variables** (package install, Docker/K8s, editing `sftpgo.json`, composing `SFTPGO_...` env vars, enabling HTTPS / ACME / Defender, data-provider setup, licensing), start from `references/deployment.md`. It contains the env-var naming rule (the part an AI must get exactly right), ready-to-paste `env.d/` recipes, and the sysadmin pitfall list.
 
@@ -241,4 +244,4 @@ See `references/pitfalls.md` for the full list with reproducible cases.
 
 ## Keeping content accurate
 
-Every claim in this skill's reference files is verified against SFTPGo runtime behavior. When SFTPGo releases introduce a new template function, a new key in the template context, or a new action type, update the reference files and bump the `metadata.version` and `metadata.upstream.verified_against` in this manifest. A template that the skill vouches for must still compile and behave correctly.
+Every claim in this skill's reference files is verified against SFTPGo runtime behavior. When SFTPGo releases introduce a new template function, a new key in the template context, or a new action type, update the reference files and bump the `metadata.version` and `metadata.upstream.verified_against` in this manifest. When the reference files are aligned with the public docs, set `metadata.upstream.docs_synced_at` to that date. A template that the skill vouches for must still compile and behave correctly.

@@ -269,7 +269,7 @@ On Docker / Kubernetes the logs are on stdout, so the JSON is directly consumabl
 
 ## 6. How to use this skill efficiently
 
-1. For a question about **concepts or operations**, fetch the relevant public doc file (the raw-GitHub URL template above). The frontmatter `description:` lets you pick without reading the whole file.
+1. For a question about **concepts or operations**, fetch the relevant public doc file (the raw-GitHub URL template above) before answering: the docs are updated before this skill, and when they disagree the docs win. The frontmatter `description:` lets you pick without reading the whole file.
 2. For a question about **Event Action templates**, use the dedicated reference files in this directory — that's where the skill adds value the public docs don't duplicate.
 3. For a question about **exact field names / enum values / required fields**, consult the OpenAPI spec directly.
 4. Before endorsing a user-provided template, run it through the red-flag checklist in `pitfalls.md`.
