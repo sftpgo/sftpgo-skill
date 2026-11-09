@@ -14,6 +14,8 @@ Cross-cutting: the skill knows the difference between the **Open Source** and **
 
 When in doubt about a specific field, an AI loading this skill should fall back to the authoritative OpenAPI spec and re-check.
 
+**New to the skill?** Read the [tutorial](TUTORIAL.md): how to ask, managing and automating users and groups, Event Manager rules, common problems, and what to double-check.
+
 ## Skill contents
 
 A single skill, [`sftpgo`](skills/sftpgo/), organized under `references/` by topic. It is intentionally generic: new topics go into `skills/sftpgo/references/` alongside the existing files, not into a separate skill directory. The files follow the install → configure → automate journey.
