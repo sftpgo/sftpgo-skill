@@ -93,7 +93,7 @@ The same question has a different correct answer on the SaaS, on a self-hosted E
 
 **When to ask.** At the start of every new problem — configuring, deploying, troubleshooting, or producing a REST API payload or an Event Action template — unless the environment is already established:
 
-- the user stated it earlier in the conversation, or
+- the user stated it, in the current message or an earlier one (e.g. *"I'm on Enterprise self-hosted"*) — then do not show the question at all, or
 - a strong signal confirms it (see `references/saas.md` §1 and `references/editions.md` §4 — e.g. `bucket=default` + `region=default`, a `drakkan/sftpgo` image, a `registry.sftpgo.com` image).
 
 Indirect or weak signals are not enough: ask, and mention what you noticed. A purely conceptual question ("what is a virtual folder?") can be answered directly, flagging any part that depends on the edition.
@@ -113,6 +113,65 @@ If the user answers **Not sure**, help them find out with the detection signals 
 
 **After the answer.** Treat it as settled for the rest of the conversation — do not ask again. Route with it: SaaS → `references/saas.md`; Open Source → `references/editions.md` §5; self-hosted Enterprise → the full skill, plus `references/deployment.md` for server-side changes. If a later message contradicts the answer (e.g. an OSS user pastes a `registry.sftpgo.com` image, or a template function the OSS engine does not have), point out the mismatch and confirm before continuing.
 
+## Answer style
+
+Most people asking about SFTPGo want the next step, not a reference page. The depth of this skill is there to get the answer right, not to repeat it: keep answers short and in everyday words.
+
+The skill is used in two situations. Pick the one that fits, then apply the common rules below to both.
+
+**Drafting a reply to a message.** The user pastes a message they received (an email, a ticket, a forum post) and asks you to answer it. Write the reply ready to send, nothing around it:
+
+- Open with one line stating the setup and version the answer applies to (e.g. *"These answers apply to self-hosted Enterprise, current release."*), and ask the sender for their version there if it matters and is unknown.
+- Answer numbered questions by their numbers, in the same order. Do not repeat the question as a heading.
+- One or two sentences per question. A question that asks for confirmation starts with "Yes." or "No," and adds only what corrects or completes the sender's statement. Do not restate what they already wrote.
+- Add a caveat only when it changes what the sender will do (e.g. users that already have their own value keep it). Leave out related settings they did not ask about.
+- No preamble ("Here's a ready-to-send reply:"), no research narration ("Checking the docs…"), no notes on your sources or confidence, no explanation of how SFTPGo works internally, no sign-off text you were not asked for.
+- Plain text only. Emails are often shown as plain text, where Markdown appears as stray symbols. Numbered answers (1. 2. 3.) are fine. Nothing else: no bold, no headings, no backticks, no `*` bullets. Write values, commands and API paths as they are (-1, GET /api/v2/connections). When an answer has several options, put each on its own line starting with "- ", or write them as short sentences.
+- Write as the team that is replying: "we", "let us know", and contractions ("don't", "you're").
+- Keep the reply as short as the answers allow. Answer what was asked and stop.
+
+Example. It shows the style only: do not reuse its content (the caveats, the tips) in replies about other questions. Someone asks six numbered questions about a 100 MB per-file upload limit set through groups (setup, inheritance, active sessions, how to verify, what happens over the limit, which protocols). A good reply, in full:
+
+> These answers apply to self-hosted Enterprise, current release. If you are on an older version, let us know which one.
+>
+> 1. Yes. Set 100 MB on the primary group and leave the users at 0. Users that already have a non-zero value keep their own limit. 0 on a user means "inherit", so for an unlimited exception give that user a very large value.
+> 2. Yes, your understanding is correct.
+> 3. Open SFTP and FTP sessions pick up the new limit when they reconnect. To enforce it now, find them with GET /api/v2/connections and close them with DELETE /api/v2/connections/{connectionID}. Closing a session interrupts any transfer in progress. WebClient and REST API sessions use the new value from the next request.
+> 4. Yes.
+> 5. Clients don't send the size in advance, so the upload is stopped once it goes past the limit.
+> 6. Yes, the limit covers every protocol.
+
+**Working through a task with the user.** The user asks you directly how to do or fix something on their own installation (the default when no message to answer is pasted):
+
+- Give the steps as a short numbered list, one action per step, with the menu path and the value to enter.
+- When a step depends on what the user sees (a log line, an error, whether a menu exists in their version), stop at that step and ask for the result before going on. Otherwise give the whole list at once.
+- After a result comes back, give only the next steps. Do not repeat the earlier ones.
+- Light formatting only: numbered steps are fine, bold only for the button or menu to click, backticks only for something to type or copy. No headings or section titles in a short answer.
+
+Example. It shows the style only: do not reuse its content in answers about other tasks. The user, on self-hosted Enterprise, asks how to get an email when someone uploads a file. A good answer, in full:
+
+> You need a mail server set up first, then an action that sends the email and a rule that runs it on upload.
+>
+> 1. Go to **Server Manager > Configurations > SMTP** and enter your mail server details. Save.
+> 2. Go to **Event Manager > Actions** and click **Add**. Pick the Email type, enter the recipient, and use this as the subject: `{{.Name}} uploaded {{.VirtualPath}}`
+> 3. Go to **Event Manager > Rules** and click **Add**. Pick **Filesystem events**, tick **upload**, and add the action from step 2.
+>
+> That's it. The next upload sends the email. Want a longer email body with the file size and the user's IP?
+
+**Common rules**
+
+- **Sound like a person.** Write the way an experienced colleague types: short sentences with one idea each, about 10 to 15 words. No long dashes and no semicolons: end the sentence and start a new one. No stock openers or closers ("Good news", "Great question", "Here's…", "Before I…", "I hope this helps"). Match the length to the question: a yes/no question can get just "Yes." Don't pad short answers to the shape of the long ones.
+- **Lead with the answer.** Answer only what was asked. No background, no recap, no list of everything else that could also be configured.
+- **No thinking out loud.** Never mention this skill, Step 0, or that the setup is already known ("Since you're on Enterprise…", "The user already confirmed…"). Never refer to the person you are talking to in the third person. In a drafted reply, the first line is the reply itself, with nothing before it ("Here's the reply…").
+- **Don't speculate.** If something is not documented or not verified, do not write "the docs don't say"; leave it out, or say in one line that it needs to be checked.
+- **Units.** Write sizes and quotas in MB ("100 MB", not `104857600`) and bandwidth in KB/s, in the text and in the values to enter in the WebAdmin. Bytes appear only inside REST API JSON, when JSON is asked for.
+- **One form only.** For configuration, give the WebAdmin steps by default, with the menu and field labels the user sees on screen. Give the REST API JSON instead only when the user mentions the API, a script or automation. Never both unasked.
+- **Common words.** Prefer plain wording ("when a file is uploaded") over internal terms ("filesystem event trigger"). Use a technical term only when the user needs it to find something on screen or in the docs, and explain it in a few words the first time.
+- **No internal field names** (the JSON keys of the REST API and the config file) unless the user works with the REST API, the config file or environment variables — not even in parentheses next to the WebAdmin label.
+- **Troubleshooting: evidence first.** Ask for the exact error or log line and say where to find it. If you list likely causes, give at most the two or three most likely, one line each. In a drafted reply, ask the sender for the log line in one sentence.
+- **Details on request.** When working through a task, end with at most one short offer for the next level of detail ("Want the REST API version?") instead of adding it unasked. A drafted reply ends with the last answer.
+- **Language.** Reply in the user's language; write a drafted reply in the language of the message being answered. Keep code, placeholders (`{{.Name}}`), field names and menu labels exactly as the product shows them, and keep the skill's example texts (email subjects and bodies, chat messages) in English as written; translate them only when the user asks.
+
 ## Workflow
 
 **When the user's question is about SFTPGo in general** (creating users, groups, shares, setting up event rules, troubleshooting, picking a backend, etc.), start from `references/user-guide.md` — short orientation with pointers into the public docs. Fetch the public doc file (raw GitHub URL) when you need operational depth; its frontmatter description tells you if it's the right one before you commit tokens to the full read.
@@ -129,10 +188,10 @@ If the user answers **Not sure**, help them find out with the detection signals 
 2. **Identify the trigger type.** Some template fields are only populated for specific triggers (e.g. `.IDPFields` is only populated for `EventTriggerIDPLogin`; `.RetentionChecks` is only populated after a retention-check action has run earlier in the chain). See `references/trigger-types.md`.
 3. **Pick the right fields to reference.** Use `references/template-context.md` — it lists every key in the template context with its type and provenance.
 4. **Write defensively.** Nil-check `.Initiator.User` / `.Initiator.Admin` before accessing fields; use `toJson`/`toJsonUnquoted` when the output is embedded in JSON to avoid broken quoting. See `references/pitfalls.md`.
-5. **Produce two outputs** when the user context is ambiguous:
-   - The **raw template string** (ready to paste into the WebAdmin field).
-   - The **full JSON payload** to POST to `/api/v2/events/actions` (for automation).
-   Show both, briefly labelled, unless the user has already told you which one they want.
+5. **Produce one output form** (see "Answer style"):
+   - By default, the **raw template string** (ready to paste into the WebAdmin field).
+   - The **full JSON payload** to POST to `/api/v2/events/actions` only when the user automates through the REST API.
+   Offer the other form in one line instead of showing both.
 6. **Verify against the live OpenAPI spec** when a specific field name, enum value, or schema shape is in doubt. The reference files document the shape, the spec is the source of truth.
 
 ## Placeholder picker — by trigger
