@@ -72,11 +72,11 @@ Ask in plain words. A few examples:
 
 | Group kind | What the user gets from it |
 | --- | --- |
-| Primary (one per user) | The base settings: storage, quota, speed limits, upload size limit. The group's value is used only when the user's own value is 0 or empty. So a user can still have a personal value. |
-| Secondary (as many as you like) | Extra folders and permissions, added on top. |
+| Primary (one per user) | The base settings: storage, quota, speed limits, upload size limit. The group's storage replaces the user's. For quota and limits, the group's value is used only when the user's own value is 0, so a user can still have a personal value. Permissions for / set on the group also replace the user's own. |
+| Secondary (as many as you like) | Extra folders, permissions and restrictions (allowed addresses, blocked protocols…), added on top. |
 | Membership (as many as you like) | Nothing. It only labels users, for example so that an Event Manager rule applies to them. |
 
-Users get the group settings when they log in. Someone who is already connected keeps the old settings until they reconnect.
+Changes to files, folders, permissions and limits reach the WebClient, WebDAV and scripts from the next request. Someone connected through SFTP or FTP keeps the old settings until they reconnect. WebClient options (such as turning off shares or password changes) are updated within about 10 minutes of use, or at the next login.
 
 Example conversation:
 
@@ -93,7 +93,7 @@ Example conversation:
 
 If you create many users, or create them from another system (a CRM, an HR tool, a spreadsheet), a script does it for you. You don't need to write it: describe what you want and the skill writes it.
 
-**Step 1: create an API key.** The script needs it to log in to SFTPGo. In the WebAdmin go to **Server Manager > API Keys** and create a key with the **Admin** scope. Copy it right away, because it is shown only once. Keep it secret, like a password.
+**Step 1: create an API key.** The script needs it to log in to SFTPGo. In the WebAdmin go to **API Keys**, add a key with the **Admin** scope and pick your admin in the **Admin** field. Copy it right away, because it is shown only once. Keep it secret, like a password. Then open **Profile** from the user menu (top right) and enable **API key authentication**: without it the key is refused.
 
 **Step 2: describe the job.** Say what the input looks like, which groups to use, and what to do when something goes wrong:
 
@@ -162,7 +162,7 @@ Most of what follows needs the Enterprise edition. On the Open Source edition, t
 > **Skill:** You need a mail server set up first, then an action that sends the email and a rule that runs it on upload.
 > 1. Go to **Server Manager > Configurations > SMTP** and enter your mail server details. Save.
 > 2. Go to **Event Manager > Actions** and click **Add**. Pick the Email type, enter the recipient, and use this as the subject: `{{.Name}} uploaded {{.VirtualPath}}`
-> 3. Go to **Event Manager > Rules** and click **Add**. Pick **Filesystem events**, tick **upload**, and add the action from step 2.
+> 3. Go to **Event Manager > Rules** and click **Add**. Pick **Filesystem events**, select **upload** in the events list, and add the action from step 2.
 >
 > That's it. The next upload sends the email. Want a longer email body with the file size and the user's IP?
 
@@ -184,8 +184,8 @@ Add your setup and version to each question.
 | Uploads from the WebClient fail. | "WebClient uploads fail with this error: … We run SFTPGo behind nginx." | Say if another web server (like nginx) sits in front of SFTPGo. Its own size limit often blocks big uploads. |
 | You want a size limit for every uploaded file. | "Set a 100 MB per-file upload limit for all users, with a few exceptions." | Users who already have their own limit keep it. |
 | The used space shown for a user looks wrong. | "The used space for user bob doesn't match the files on disk. Why, and how do I fix it?" | If files were changed outside SFTPGo, SFTPGo has to recount them (a quota scan). |
-| A group change doesn't reach connected users. | "I changed a group setting. How do I apply it to users who are connected now?" | Connected users keep the old settings until they reconnect. |
-| You want two servers sharing the work. | "We want two SFTPGo servers behind a load balancer, with files on local disks." | Both servers need the same database, the same files and the same SSH keys. Some features need a specific license. |
+| A group change doesn't reach connected users. | "I changed a group setting. How do I apply it to users who are connected now?" | Users connected through SFTP or FTP keep the old settings until they reconnect. WebDAV and the WebClient pick up most of them from the next request. |
+| You want two servers sharing the work. | "We want two SFTPGo servers behind a load balancer." | Both servers need the same database, the same SSH keys and the same files: a shared disk (NFS, SMB) or cloud storage, not each server's local disk. Some features need a specific license. |
 | You want a second server that takes over if the first one fails. | "How do I set up an active/standby pair?" | The spare server should stay off until it's needed, because a running server counts as an active license. |
 | You want to be told about uploads. | See [section 5.2](#52-example-email-on-upload). | A mail server must be set up first. |
 

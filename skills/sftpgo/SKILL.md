@@ -14,7 +14,7 @@ metadata:
     verified_against: "v2.8.x"
     docs_synced_at: "2026-10-29"
   current_scope:
-    - Event Action templates — Go text/template authoring for email / HTTP / command / IDP / IMAP / ICAP / filesystem actions, as accepted both by the REST API (`/api/v2/events/actions`, `/api/v2/events/rules`) and by the WebAdmin UI form fields.
+    - Event Action templates — Go text/template authoring for email / HTTP / command / IDP / IMAP / ICAP / filesystem actions, as accepted both by the REST API (`/api/v2/eventactions`, `/api/v2/eventrules`) and by the WebAdmin UI form fields.
     - Deployment & configuration — installation methods, `sftpgo.<ext>` config file, `SFTPGO_...` environment variable convention, `env.d/` recipes, sysadmin pitfalls.
     - SaaS (fully-managed offering at `sftpgo.com`) — how to detect, `default` group convention, integrated S3 (`bucket=default`, `region=default`), tier-gated features, configuration changes that trigger an automated restart, what to avoid suggesting (CLI / env vars / config files).
     - Editions and distribution channels — Open Source vs Enterprise, third-party redistributions (managed-hosting providers, NAS / home-lab app stores, community Linux-package archives, unofficial Docker images), what Enterprise adds, detection signals, and the rule to flag Enterprise-only features plainly when the user is on OSS.
@@ -139,9 +139,9 @@ Example. It shows the style only: do not reuse its content (the caveats, the tip
 >
 > 1. Yes. Set 100 MB on the primary group and leave the users at 0. Users that already have a non-zero value keep their own limit. 0 on a user means "inherit", so for an unlimited exception give that user a very large value.
 > 2. Yes, your understanding is correct.
-> 3. Open SFTP and FTP sessions pick up the new limit when they reconnect. To enforce it now, find them with GET /api/v2/connections and close them with DELETE /api/v2/connections/{connectionID}. Closing a session interrupts any transfer in progress. WebClient and REST API sessions use the new value from the next request.
+> 3. Open SFTP and FTP sessions pick up the new limit when they reconnect. To enforce it now, find them with GET /api/v2/connections and close them with DELETE /api/v2/connections/{connectionID}. Closing a session interrupts any transfer in progress. WebDAV, WebClient and REST API sessions use the new value from the next request.
 > 4. Yes.
-> 5. Clients don't send the size in advance, so the upload is stopped once it goes past the limit.
+> 5. The upload starts and is stopped as soon as it goes past the limit. Resuming a file that is already over the limit is refused at once.
 > 6. Yes, the limit covers every protocol.
 
 **Working through a task with the user.** The user asks you directly how to do or fix something on their own installation (the default when no message to answer is pasted):
@@ -157,7 +157,7 @@ Example. It shows the style only: do not reuse its content in answers about othe
 >
 > 1. Go to **Server Manager > Configurations > SMTP** and enter your mail server details. Save.
 > 2. Go to **Event Manager > Actions** and click **Add**. Pick the Email type, enter the recipient, and use this as the subject: `{{.Name}} uploaded {{.VirtualPath}}`
-> 3. Go to **Event Manager > Rules** and click **Add**. Pick **Filesystem events**, tick **upload**, and add the action from step 2.
+> 3. Go to **Event Manager > Rules** and click **Add**. Pick **Filesystem events**, select **upload** in the events list, and add the action from step 2.
 >
 > That's it. The next upload sends the email. Want a longer email body with the file size and the user's IP?
 
@@ -167,7 +167,7 @@ Example. It shows the style only: do not reuse its content in answers about othe
 - **Lead with the answer.** Answer only what was asked. No background, no recap, no list of everything else that could also be configured.
 - **No thinking out loud.** Never mention this skill, Step 0, or that the setup is already known ("Since you're on Enterprise…", "The user already confirmed…"). Never refer to the person you are talking to in the third person. In a drafted reply, the first line is the reply itself, with nothing before it ("Here's the reply…").
 - **Don't speculate.** If something is not documented or not verified, do not write "the docs don't say"; leave it out, or say in one line that it needs to be checked.
-- **Units.** Write sizes and quotas in MB ("100 MB", not `104857600`) and bandwidth in KB/s, in the text and in the values to enter in the WebAdmin. Bytes appear only inside REST API JSON, when JSON is asked for.
+- **Units.** Write sizes and quotas in MB or GB ("100 MB", not `104857600`) and bandwidth in KB/s, in the text and in the values to enter in the WebAdmin. Bytes appear only inside REST API JSON, when JSON is asked for.
 - **One form only.** For configuration, give the WebAdmin steps by default, with the menu and field labels the user sees on screen. Give the REST API JSON instead only when the user mentions the API, a script or automation. Never both unasked.
 - **Common words.** Prefer plain wording ("when a file is uploaded") over internal terms ("filesystem event trigger"). Use a technical term only when the user needs it to find something on screen or in the docs, and explain it in a few words the first time.
 - **No internal field names** (the JSON keys of the REST API and the config file) unless the user works with the REST API, the config file or environment variables — not even in parentheses next to the WebAdmin label.
@@ -193,7 +193,7 @@ Example. It shows the style only: do not reuse its content in answers about othe
 4. **Write defensively.** Nil-check `.Initiator.User` / `.Initiator.Admin` before accessing fields; use `toJson`/`toJsonUnquoted` when the output is embedded in JSON to avoid broken quoting. See `references/pitfalls.md`.
 5. **Produce one output form** (see "Answer style"):
    - By default, the **raw template string** (ready to paste into the WebAdmin field).
-   - The **full JSON payload** to POST to `/api/v2/events/actions` only when the user automates through the REST API.
+   - The **full JSON payload** to POST to `/api/v2/eventactions` only when the user automates through the REST API.
    Offer the other form in one line instead of showing both.
 6. **Verify against the live OpenAPI spec** when a specific field name, enum value, or schema shape is in doubt. The reference files document the shape, the spec is the source of truth.
 

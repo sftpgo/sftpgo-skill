@@ -35,7 +35,7 @@ Weak signals — possible but verify:
 - **Integrated S3 storage** — accessed by setting `bucket=default` and `region=default` on an S3 (Compatible) filesystem. These are sentinel values; credentials are managed server-side and rotated periodically without customer action.
 - **`default` group** — pre-created and wired to the integrated storage with `users/%username%/` as the key prefix. As Primary group it gives each user a private folder: Alice sees `users/alice/` only.
 - **`superusers` group** — pre-created on the same storage with an empty key prefix: its members see every user's files (each under `users/<username>`) and anything else in the storage. See §3.2.
-- **Simplified user form for the default admin** — the default admin account that we ship has several advanced sections hidden on the Add User page. Additional admins the customer creates themselves see the full form.
+- **Add User form** — **Groups** already shows `default` as the Primary group and **File system** shows *None*: the storage comes from the group (§3.1). Groups and Event Manager rules are visible and editable like on any Enterprise install.
 - **Audit logs** — the audit plugins are active. Events are browsable from **Server Manager → Logs** and queryable via REST. Retention depends on the plan (§3.12).
 - **Brute-force protection** — the Defender is always on, plus a connection rate limit (§3.8).
 - **Recycle bin** — deleted or overwritten files are copied to a `recycle/` folder for 3 days, through two Event Manager rules (§3.6).
@@ -107,7 +107,7 @@ If the user is unsure, recommend leaving it off.
 ### 3.7 Passwords and sign-in
 
 - **First login** — the admin should change the password (user icon top right → Change password) and enable two-factor authentication from the same menu **before** adding users: the instance is reachable from the internet from day one.
-- **Password strength** — the default strength is 70: it rejects obvious passwords and accepts a few unrelated words. To relax or tighten it for one user: open the user → **Profile → Password strength**; a lower value accepts simpler passwords, 0 accepts any. Classic rules (minimum length, uppercase, digits, symbols) can be set there instead.
+- **Password strength** — the default strength is 70: it rejects obvious passwords and accepts a few unrelated words. To relax or tighten it for one user: open the user → **Profile → Password strength**; a lower value (e.g. 50) accepts simpler passwords. 0 does not turn the check off: it means "use the default", so the 70 still applies. Classic rules (minimum length, uppercase, digits, symbols) can be set there too; they apply together with the strength, not instead of it.
 - **Two-factor authentication** — admins enable it from their profile, users from the WebClient.
 - **Public keys** — the user creates a key pair (`ssh-keygen` or PuTTYgen) and sends the public key; the admin pastes it in the user's **Public keys** section. Supported: Ed25519, ECDSA, RSA 2048 bits or more. A key starting with `---- BEGIN SSH2 PUBLIC KEY ----` must first be converted with `ssh-keygen -i -f key.pub`.
 - **LDAP / Active Directory and OpenID Connect** (Standard plan and above) — **Server Manager → Configurations → LDAP** or **→ OIDC**. Saving needs a short restart (§3.15). OpenID Connect works for the WebAdmin and the WebClient only: users who also need SFTP must sign in to the WebClient once and set a password or a public key.
@@ -120,9 +120,9 @@ If the user is unsure, recommend leaving it off.
   - **Trusted List** — never blocked or limited (e.g. the office). The one used most often.
   - **Defender List** — addresses always blocked, or never blocked, by the attack protection.
   - **Rate limiters safe list** — exempt from the connection limit.
-  - **Allow List** — when enabled, only listed addresses can connect. Enabled on request; it must be filled in first, otherwise nobody can connect. Enabling it the first time needs a short restart (§3.15).
+  - **Allow List** — when enabled, only listed addresses can connect. The user adds the allowed addresses first, otherwise nobody can connect, then writes to technical support (§3.16) to enable it. We enable it and restart the service.
 - Per-user or per-group address restrictions are in the **ACLs** section of the user or group.
-- **Geo-IP** (Small plan and above) — **Server Manager → Configurations → Geo-IP**, allow or deny by two-letter country code. Trusted List addresses are never blocked.
+- **Geo-IP** (Small plan and above) — **Server Manager → Configurations → Geo-IP**, allow or deny by two-letter country code. Trusted List addresses are never blocked. Saving needs a short restart (§3.15).
 - If the default Defender or rate-limit thresholds don't fit, write to technical support (§3.16).
 
 ### 3.9 Plan-gated features
@@ -175,17 +175,21 @@ SFTPGo sends emails only after the user enters the settings of their mail provid
 
 - The Event Manager works as on self-hosted Enterprise, with the limits of §3.9 and the Backup action disabled. Leave the two recycle rules (§3.6) in place.
 - For webhooks, suggest testing the endpoint with a service such as webhook.site first.
-- Everything in the WebAdmin is also available through the REST API; a Terraform provider exists too. For scripts, API keys are more convenient than tokens: they don't expire and are sent in the `X-SFTPGO-API-KEY` header.
+- Everything in the WebAdmin is also available through the REST API; a Terraform provider exists too. For scripts, API keys are more convenient than tokens: they don't expire unless an expiration date is set, and are sent in the `X-SFTPGO-API-KEY` header. An Admin-scope key must be linked to an admin (the **Admin** field of the key) and that admin must have **API key authentication** enabled, otherwise the key is refused.
 - End users can automate their own transfers: a user token from `/api/v2/user/token`, then the `/api/v2/user/files` endpoints.
 
 ### 3.15 Configuration changes that need a brief restart
 
+The user saves these from the WebAdmin and we restart:
+
 - Turning on or changing the **OIDC** configuration.
 - Turning on or changing the **LDAP** configuration.
-- Enabling the global **Allow List** for the first time.
+- Turning on or changing **Geo-IP** filtering.
+- Changing the **SFTP** section (host keys, host certificates, algorithms).
+- Changing the **WebDAV** section (TLS version and ciphers), when WebDAV is enabled.
 - Adding a custom domain in **Automatic Certificates (Let's Encrypt)** when the user self-serves the certificate (§3.11).
 
-HIPAA mode is enabled by us on request rather than from the WebAdmin, so it does **not** appear on this list — see §3.10.
+The global **Allow List** and HIPAA mode are enabled by us on request rather than from the WebAdmin, so they do **not** appear on this list: for the Allow List the user fills it in and writes to technical support (§3.8), for HIPAA see §3.10.
 
 **We are notified automatically** when any of these settings are saved; the page saying the service must be restarted needs no action from the user. During Italian business hours (09:00–20:00 Italian time) we check the configuration and restart the service within a few minutes; otherwise the next business morning. If it is needed sooner, write to technical support (§3.16).
 

@@ -3,9 +3,9 @@
 Each example shows **two forms**:
 
 - **WebAdmin paste** — the raw string you type into the SFTPGo WebAdmin form field (Subject, Body, Endpoint, template_user, etc.).
-- **REST API payload** — the JSON body you `POST` to `/api/v2/events/actions` to create the same action via the API.
+- **REST API payload** — the JSON body you `POST` to `/api/v2/eventactions` to create the same action via the API.
 
-When a rule is needed to wire the action to a trigger, the corresponding `POST /api/v2/events/rules` body is shown below the action.
+When a rule is needed to wire the action to a trigger, the corresponding `POST /api/v2/eventrules` body is shown below the action.
 
 All examples have been validated against SFTPGo v2.8.x.
 
@@ -41,7 +41,7 @@ Status:      FAILURE ({{stringJoin .Errors ", "}})
 ### REST API payload
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "notify-upload",
   "description": "Email notification on file upload",
@@ -60,7 +60,7 @@ POST /api/v2/events/actions
 ### Rule to wire it up
 
 ```json
-POST /api/v2/events/rules
+POST /api/v2/eventrules
 {
   "name": "upload-notify",
   "status": 1,
@@ -273,7 +273,7 @@ Mattermost's built-in webhook is Slack-compatible — the Slack snippets above (
 Only the `body` string changes; the rest of the action payload is identical:
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "chat-upload-notify",
   "description": "Chat notification on upload",
@@ -323,7 +323,7 @@ POST /api/v2/events/actions
 ### REST API payload
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "audit-provider",
   "description": "Push all user provider events to the audit service",
@@ -346,7 +346,7 @@ POST /api/v2/events/actions
 ### Rule
 
 ```json
-POST /api/v2/events/rules
+POST /api/v2/eventrules
 {
   "name": "audit-users",
   "status": 1,
@@ -396,7 +396,7 @@ Scenario: users whose IdP role claim equals `app.power-user` must be provisioned
 ### REST API payload
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "idp-provision",
   "description": "JIT provision user on first IDP login",
@@ -413,7 +413,7 @@ POST /api/v2/events/actions
 ### Rule
 
 ```json
-POST /api/v2/events/rules
+POST /api/v2/eventrules
 {
   "name": "idp-jit",
   "status": 1,
@@ -461,7 +461,7 @@ If the role claim is a JSON array (a typical group-membership claim like `groups
 ### Action 1 — Retention Check
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "retention-home-90d",
   "type": 8,
@@ -498,7 +498,7 @@ Action: {{.ActionName}} (type={{.Type}})
 ```
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "retention-email",
   "type": 3,
@@ -515,7 +515,7 @@ POST /api/v2/events/actions
 ### Rule
 
 ```json
-POST /api/v2/events/rules
+POST /api/v2/eventrules
 {
   "name": "nightly-retention",
   "status": 1,
@@ -549,7 +549,7 @@ POST /api/v2/events/rules
 ### REST API payload
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "icap-scan",
   "type": 17,
@@ -576,7 +576,7 @@ Values for the policy fields:
 Paired with a filesystem rule:
 
 ```json
-POST /api/v2/events/rules
+POST /api/v2/eventrules
 {
   "name": "icap-on-upload",
   "status": 1,
@@ -612,7 +612,7 @@ POST /api/v2/events/rules
 ### REST API payload
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "log-upload",
   "type": 2,
@@ -648,7 +648,7 @@ This combines a retention action with a filesystem delete to clear a specific st
 ### Actions
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "clear-staging-contents",
   "type": 9,
@@ -670,7 +670,7 @@ The rule pairs it with a Schedule trigger (or with a `first-upload`-chained rule
 ### REST API payload
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "forward-to-crm",
   "type": 1,
@@ -712,7 +712,7 @@ POST /api/v2/events/actions
 The IMAP action **reads** unread messages from a mailbox and saves their attachments into SFTPGo storage. Typical use: a mailbox where partners email attachments, and SFTPGo drops the attachments into the user's home or a virtual folder for downstream processing.
 
 ```json
-POST /api/v2/events/actions
+POST /api/v2/eventactions
 {
   "name": "imap-ingest",
   "type": 16,
@@ -742,7 +742,7 @@ Field semantics:
 This action is typically paired with a **scheduled** trigger (every N minutes) rather than a filesystem event.
 
 ```json
-POST /api/v2/events/rules
+POST /api/v2/eventrules
 {
   "name": "imap-poll",
   "status": 1,
